@@ -22,6 +22,8 @@ A modern Python-based spectral data visualization application with advanced feat
 
 Spectator is a sophisticated spectral data viewer designed to replace IDL Z3showred for the analysis and visualization of multi-dimensional spectroscopic data, particularly Stokes parameter data from polarimetric observations. Built with a modern Model-View-Controller (MVC) architecture, it provides interactive visualization capabilities for complex spectral datasets.
 
+![spectator_gui](docs/crosshair_synchronized.png)
+
 ## Features
 
 ### Core Functionality
