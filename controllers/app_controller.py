@@ -240,16 +240,199 @@ class ViewerSelector:
         else:
             raise ValueError(f"No viewer available for {ndim}D data")
 
-class DataManager:
+class DataScaler:
+    """
+    Class to handle automatic data scaling for better visualization.
+    
+    Detects when data values are very small or very large and applies
+    appropriate scaling factors to improve histogram and display readability.
+    """
+    
+    def __init__(self):
+        self.current_scale_factors = {}  # Per-state scaling factors
+        self.current_scale_exponents = {}  # Per-state scaling exponents
+        self.current_scale_labels = {}  # Per-state scaling labels
+        self.has_states_axis = False
+        self.states_axis_index = None
+        # Target: keep final data values under 10 for better histogram display
+        self.target_max_value = 10.0
+        self.scale_thresholds = {
+            'large': {
+                1e12: (1e-12, -12, "×10⁻¹²"),
+                1e9: (1e-9, -9, "×10⁻⁹"),
+                1e6: (1e-6, -6, "×10⁻⁶"),
+                1e3: (1e-3, -3, "×10⁻³"),
+                100: (1e-2, -2, "×10⁻²"),
+                10: (1e-1, -1, "×10⁻¹"),
+            },
+            'small': {
+                1e-12: (1e12, 12, "×10¹²"),
+                1e-9: (1e9, 9, "×10⁹"),
+                1e-6: (1e6, 6, "×10⁶"),
+                1e-3: (1e3, 3, "×10³"),
+                1e-2: (1e2, 2, "×10²"),
+                1e-1: (1e1, 1, "×10¹"),
+            }
+        }
+    
+    def analyze_data_range(self, data: np.ndarray) -> Tuple[float, int, str]:
+        """
+        Analyze data range and determine appropriate scaling factor to keep max values under 10.
+        
+        Args:
+            data: Input data array
+            
+        Returns:
+            Tuple of (scale_factor, exponent, label)
+        """
+        if data is None or data.size == 0:
+            return 1.0, 0, ""
+        
+        # Get data range, ignoring NaN and infinite values
+        valid_data = data[np.isfinite(data)]
+        if len(valid_data) == 0:
+            return 1.0, 0, ""
+        
+        # Calculate the maximum absolute value to determine scale
+        data_max = np.max(np.abs(valid_data))
+        
+        if data_max == 0:
+            return 1.0, 0, ""
+        
+        # If data is already in a good range (0.1 to 10), no scaling needed
+        if 0.1 <= data_max <= self.target_max_value:
+            return 1.0, 0, ""
+        
+        # Calculate the required scaling to bring max value to around 1-10 range
+        # We want: data_max * scale_factor ≈ target (let's target 5 for good margin)
+        target_value = 5.0
+        required_scale = target_value / data_max
+        
+        # Round to nearest power of 10 for clean scaling
+        exponent = round(np.log10(required_scale))
+        scale_factor = 10 ** exponent
+        
+        # Generate appropriate label
+        if exponent > 0:
+            label = f"×10{self._format_exponent(exponent)}"
+        elif exponent < 0:
+            label = f"×10{self._format_exponent(exponent)}"
+        else:
+            label = ""
+        
+        return scale_factor, exponent, label
+    
+    def _format_exponent(self, exp: int) -> str:
+        """Format exponent with superscript characters."""
+        if exp == 0:
+            return ""
+        
+        # Superscript digits mapping
+        superscript = {
+            '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+            '-': '⁻'
+        }
+        
+        exp_str = str(exp)
+        return ''.join(superscript.get(c, c) for c in exp_str)
+    
+    def scale_data(self, data: np.ndarray, target_axes: list, auto_scale: bool = True) -> np.ndarray:
+        """
+        Apply per-state scaling to data if needed.
+        
+        Args:
+            data: Input data array
+            target_axes: List of axis types in data order
+            auto_scale: Whether to automatically determine scaling
+            
+        Returns:
+            Scaled data array
+        """
+        if not auto_scale:
+            return data
+        
+        # Check if data has a states axis
+        self.has_states_axis = any(ax == AxisType.STATES for ax in target_axes)
+        
+        if not self.has_states_axis:
+            # No states axis - apply global scaling as before
+            scale_factor, exponent, label = self.analyze_data_range(data)
+            self.current_scale_factors = {'global': scale_factor}
+            self.current_scale_exponents = {'global': exponent}
+            self.current_scale_labels = {'global': label}
+            
+            if scale_factor != 1.0:
+                return data * scale_factor
+            else:
+                return data
+        
+        # Has states axis - apply per-state scaling
+        self.states_axis_index = target_axes.index(AxisType.STATES)
+        n_states = data.shape[self.states_axis_index]
+        
+        # Create a copy of the data for scaling
+        scaled_data = data.copy()
+        
+        # Scale each state independently
+        for state_idx in range(n_states):
+            # Extract data for this state
+            state_slice = tuple(slice(None) if i != self.states_axis_index else state_idx 
+                              for i in range(data.ndim))
+            state_data = data[state_slice]
+            
+            # Analyze and determine scaling for this state
+            scale_factor, exponent, label = self.analyze_data_range(state_data)
+            
+            # Store scaling information for this state
+            self.current_scale_factors[state_idx] = scale_factor
+            self.current_scale_exponents[state_idx] = exponent
+            self.current_scale_labels[state_idx] = label
+            
+            # Apply scaling to this state if needed
+            if scale_factor != 1.0:
+                scaled_data[state_slice] = state_data * scale_factor
+        
+        return scaled_data
+    
+    def get_scale_info(self) -> Dict[str, Any]:
+        """
+        Get current scaling information.
+        
+        Returns:
+            Dictionary with per-state scale factors, exponents, and labels
+        """
+        # Check if any scaling was applied
+        is_scaled = any(factor != 1.0 for factor in self.current_scale_factors.values())
+        
+        return {
+            'factors': self.current_scale_factors.copy(),
+            'exponents': self.current_scale_exponents.copy(),
+            'labels': self.current_scale_labels.copy(),
+            'is_scaled': is_scaled,
+            'has_states_axis': self.has_states_axis,
+            'states_axis_index': self.states_axis_index
+        }
+    
+    def reset_scaling(self):
+        """Reset scaling to default values."""
+        self.current_scale_factors = {}
+        self.current_scale_exponents = {}
+        self.current_scale_labels = {}
+        self.has_states_axis = False
+        self.states_axis_index = None
+
+class Manager:
     """
     Main data manager class that handles input parsing, data rearrangement,
-    and viewer generation.
+    viewer generation, and data scaling.
     """
     
     def __init__(self):
         self.dimensionality = DataDimensionality()
         self.rearranger = DataRearranger()
         self.viewer_selector = ViewerSelector()
+        self.scaler = DataScaler()
     
     def display_data(self, data: np.ndarray, 
                     *axes: str,
@@ -297,20 +480,56 @@ class DataManager:
         
         # Rearrange data if necessary
         if validated_axes != target_axes:
-            print(f"Rearranging data from {[ax.value for ax in validated_axes]} "
-                  f"to {[ax.value for ax in target_axes]}")
             rearranged_data = self.rearranger.rearrange_data(data, validated_axes, target_axes)
         else:
             rearranged_data = data
         
+        # Apply data scaling for better visualization
+        auto_scale = kwargs.get('auto_scale', True)  # Allow disabling auto-scaling
+        scaled_data = self.scaler.scale_data(rearranged_data, target_axes, auto_scale=auto_scale)
+        
+        # Log scaling information if scaling was applied
+        scale_info = self.scaler.get_scale_info()
+        if scale_info['is_scaled']:
+            if scale_info['has_states_axis']:
+                print("Per-state data scaling applied:")
+                for state_idx, factor in scale_info['factors'].items():
+                    if factor != 1.0:
+                        label = scale_info['labels'][state_idx]
+                        state_name = states_info.get(state_idx, f"State {state_idx}") if states_info else f"State {state_idx}"
+                        print(f"  {state_name}: factor {factor:.2e} ({label})")
+            else:
+                # Global scaling (no states axis)
+                factor = scale_info['factors']['global']
+                label = scale_info['labels']['global']
+                print(f"Data scaled by factor {factor:.2e} ({label})")
+        
         # Select and create appropriate viewer
-        viewer_type = self.viewer_selector.select_viewer(rearranged_data.shape, target_axes)
+        viewer_type = self.viewer_selector.select_viewer(scaled_data.shape, target_axes)
         
         # Generate viewer-specific metadata
-        viewer_metadata = self._generate_viewer_metadata(rearranged_data, target_axes, states_info, title)
+        viewer_metadata = self._generate_viewer_metadata(scaled_data, target_axes, states_info, title)
+        
+        # Add scaling information to metadata for potential display
+        viewer_metadata['scale_info'] = scale_info
         
         # Create and return viewer
-        return self._create_viewer(viewer_type, rearranged_data, viewer_metadata, **kwargs)
+        return self._create_viewer(viewer_type, scaled_data, viewer_metadata, **kwargs)
+    
+    def get_current_scale_info(self) -> Dict[str, Any]:
+        """
+        Get the current data scaling information.
+        
+        Returns:
+            Dictionary containing scale factor, exponent, label, and scaling status
+        """
+        return self.scaler.get_scale_info()
+    
+    def reset_data_scaling(self):
+        """
+        Reset data scaling to default values.
+        """
+        self.scaler.reset_scaling()
     
     def _parse_input_args(self, data: np.ndarray, 
                          state_names: Optional[List[str]], 
@@ -385,7 +604,7 @@ class DataManager:
         """Create the appropriate viewer instance."""
         if viewer_type == "spectator":
             # Use existing 3D spectral viewer
-            from viewers import spectator
+            from controllers.viewers import spectator
             
             # Validate that this is the expected format for the current viewer
             if (len(data.shape) == 3 and 
@@ -415,7 +634,7 @@ class DataManager:
             }
 
 # Global instance for easy access
-data_manager = DataManager()
+data_manager = Manager()
 
 # Convenience function that matches the requested interface
 def display_data(data: np.ndarray, 
@@ -467,12 +686,12 @@ def display_data(data: np.ndarray,
 
 if __name__ == "__main__":
     # Test the data manager with example data
-    from functions import ExampleData
+    from utils.data_utils import generate_example_data
     
     print("Testing Data Manager...")
     
     # Generate test data
-    test_data = ExampleData()  # Shape: (N_STOKES, N_WL, N_X)
+    test_data = generate_example_data()  # Shape: (N_STOKES, N_SPECTRAL, N_X)
     print(f"Test data shape: {test_data.shape}")
     
     # Test 1: Current format (should work with existing viewer)
