@@ -1,43 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Nov  6 09:56:31 2024
 
-@author: franziskaz
-
-WARNING: if the qdarkstyle is used, there are some minor bugs in Dock and VerticalLabel:
-    create the following links (look at the files in this folder):
-        - mv ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py_bk
-        - ln -s ~/code/dkist/VerticalLabel.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/widgets/
-        - mv ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py_bk
-        - ln -s ~/code/dkist/Dock.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/dockarea/
-
-pyqtgraph = 0.13.7
-
-INPUT:
-    - numpy data cube ordered by N_STOKES, N_WL, N_X 
-
-- TODO: 
-    + handle N_STOKES=1 case
-    + add spatial x and spatial y profile
-    + averaging in x and/or y
-    + large data - maybe using fastplotlib?
-    + changing point sizes does not work: self.plot.getAxis('left').setStyle(tickFont = QFont().setPointSize(1))
-    + multiple crosshairs
-    + flexible data (only image spectra, non-stokes scans...)
-    
-Look at (multiple) images in an interactive way.
-"""
-
-# import pyqtgraph.examples
-# pyqtgraph.examples.run()
-
-import sys
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
-#from PyQt5.QtGui import QFont
-import qdarkstyle
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
 from typing import List, Tuple, Dict, Optional, Any 
@@ -45,31 +9,14 @@ from functools import partial
 
 from getWidgetColors import getWidgetColors
 
+from functions import *
+
 CROSSHAIR_COLORS = {'v': 'white', 'h_image': 'dodgerblue', 'h_spectrum_image': 'white'}
 AVG_COLORS = ['dodgerblue', 'yellow']
 # Define the minimum allowed distance between line1 and line2 (the averaging lines)
 MIN_LINE_DISTANCE = 2.0 # Minimum pixel distance 
 
-# --- Helper Functions ---
-
-def AddLine(plotItem: pg.PlotItem, 
-            color: str, 
-            angle: float, 
-            moveable: bool = False, pos=0, style=QtCore.Qt.SolidLine ) -> pg.InfiniteLine:
-    """Adds an InfiniteLine to a PlotItem."""
-    line = pg.InfiniteLine(pos=pos,angle=angle, movable=moveable)
-    line.setPen(color, width=1.8, style=style)
-    plotItem.addItem(line, ignoreBounds=True)
-    return(line)
-
-def AddCrosshair(plotItem: pg.PlotItem, 
-                 vcolor: str, 
-                 hcolor: str, 
-                 style=QtCore.Qt.DashLine) -> Tuple[pg.InfiniteLine, pg.InfiniteLine]:
-    """Adds a crosshair (vertical and horizontal InfiniteLine) to a PlotItem."""
-    vLine = AddLine(plotItem, vcolor, 90, style=style)
-    hLine = AddLine(plotItem, hcolor, 0, style=style)
-    return(vLine, hLine)
+# --- simple widgets
 
 class BasePlotWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -89,17 +36,6 @@ class BasePlotWidget(QtWidgets.QWidget):
         
         self.current_x_idx_avg = 0
         self.current_wl_idx_avg = 0
-    
-def CreateYLimitLabel(name:str):
-    """Label for spectrum y limits"""
-    limit_label = QtWidgets.QLabel(name)
-    limit_edit = QtWidgets.QLineEdit()
-    limit_edit.setEnabled(False)
-
-    layout = QtWidgets.QHBoxLayout()
-    layout.addWidget(limit_label)
-    layout.addWidget(limit_edit)
-    return(limit_label, limit_edit, layout)
 
 class LinesControlGroup(QtWidgets.QWidget): 
     """
@@ -130,7 +66,7 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.sync_button_y_avg.clicked.connect(self._on_toggle_avg_y_sync) # Connect to internal handler
         sync_box_layout.addWidget(self.sync_button_y_avg)
 
-        self.sync_button_x_avg = QtWidgets.QPushButton("wavelength avg.")
+        self.sync_button_x_avg = QtWidgets.QPushButton("spectral avg.")
         self.sync_button_x_avg.setCheckable(True)
         self.sync_button_x_avg.clicked.connect(self._on_toggle_avg_x_sync) # Connect to internal handler
         sync_box_layout.addWidget(self.sync_button_x_avg)
@@ -142,7 +78,7 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.avg_lines_box = QtWidgets.QGroupBox("Avg. lines")
         avg_lines_box_layout = QtWidgets.QVBoxLayout(self.avg_lines_box)
         
-        self.button_remove_x_avg = QtWidgets.QPushButton("remove wavelength avg.")
+        self.button_remove_x_avg = QtWidgets.QPushButton("remove spectral avg.")
         self.button_remove_x_avg.setCheckable(True)
         self.button_remove_x_avg.clicked.connect(self._on_toggle_avg_x_remove) # Connect to internal handler
         
@@ -207,11 +143,13 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
     def __init__(self, stokes_name: str,
                  spectrum_widget: 'StokesSpectrumWindow',
                  spectrum_image_widget: 'StokesSpectrumImageWindow',
+                 spatial_widget: 'StokesSpatialWindow' = None,
                  parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(f"{stokes_name} y-axis limits", parent)
         self.stokes_name = stokes_name
         self.spectrum_widget = spectrum_widget
         self.spectrum_image_widget = spectrum_image_widget
+        self.spatial_widget = spatial_widget
 
         self._init_ui()
         self._connect_signals()
@@ -249,6 +187,10 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
         if fixed:
             self._update_spectrum_limits_from_edits() # Apply current values from edits
             self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=False)
+            # Also disable auto-range for spatial window x-axis
+            if self.spatial_widget:
+                self.spatial_widget.plotItem.enableAutoRange(axis='x', enable=False)
+            
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 self.spectrum_image_widget.histogram.sigLevelsChanged.connect(
                     partial(self._on_histogram_levels_changed)
@@ -256,6 +198,10 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
         else:
             self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=True)
             self.spectrum_widget.plotItem.autoRange(y=True)
+            # Re-enable auto-range for spatial window x-axis
+            if self.spatial_widget:
+                self.spatial_widget.plotItem.enableAutoRange(axis='x', enable=True)
+                self.spatial_widget.plotItem.autoRange(x=True)
 
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 # Disconnect the signal (assuming you stored the partial connection if needed,
@@ -273,6 +219,7 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
         """
         Slot to be called when the histogram levels change.
         Updates the min/max QLineEdit fields and the spectrum plot's Y-range.
+        Also updates spatial window X-range when fix limits is enabled.
         """
         if self.fix_limits_checkbox.isChecked():
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
@@ -287,6 +234,10 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
 
                 if self.spectrum_widget:
                     self.spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
+                
+                # Also update spatial window x-axis range
+                if self.spatial_widget:
+                    self.spatial_widget.plotItem.setXRange(min_val, max_val, padding=0)
 
     def _update_spectrum_limits_from_edits(self):
         """Applies manual y-axis limits to the spectrum plot and image histogram."""
@@ -315,17 +266,19 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
                 self.spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
                 self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=False)
 
+            # Also apply to spatial window x-axis when fix limits is enabled
+            if self.spatial_widget and self.fix_limits_checkbox.isChecked():
+                self.spatial_widget.plotItem.setXRange(min_val, max_val, padding=0)
+
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 self.spectrum_image_widget.histogram.setLevels(min_val, max_val)
 
         except ValueError:
-
             self.min_limit_edit.setStyleSheet("background-color: red;")
             self.max_limit_edit.setStyleSheet("background-color: red;")
 
     def _update_limit_edits_from_plot(self, limits: Tuple[float, float]):
         """Updates min/max QLineEdit widgets from plot's actual Y-range."""
-
         if not self.fix_limits_checkbox.isChecked():
             min_val, max_val = limits
             self.min_limit_edit.blockSignals(True)
@@ -334,177 +287,6 @@ class SpectrumLimitControlGroup(QtWidgets.QGroupBox):
             self.max_limit_edit.setText(f"{max_val:.2f}")
             self.min_limit_edit.blockSignals(False)
             self.max_limit_edit.blockSignals(False)
-
-def CreateWlLimitLabel(name: str):
-    """Label for wavelength limits"""
-    wavelength_label = QtWidgets.QLabel(name)
-    wavelength_edit = QtWidgets.QLineEdit()
-    wavelength_edit.setPlaceholderText("Optional")
-    layout = QtWidgets.QHBoxLayout()
-    layout.addWidget(wavelength_label)
-    layout.addWidget(wavelength_edit)
-    return(wavelength_label, wavelength_edit, layout)
-
-def CreateHistrogram(image_item: pg.ImageItem, 
-                     layout: QtWidgets.QLayout) -> pg.HistogramLUTWidget:
-    """Creates and configures a HistogramLUTWidget."""
-    histogram = pg.HistogramLUTWidget()
-    histogram.setImageItem(image_item)
-    histogram.setBackground(getWidgetColors.BG_NORMAL) 
-    histogram.setFixedWidth(60) # Set a fixed width of 120 pixels
-    layout.addWidget(histogram)
-    return(histogram)
-
-def SetPlotXlamRange(plot_widget: pg.PlotWidget, 
-                     wavelength: np.ndarray, 
-                     min_val: Optional[float] = None, 
-                     max_val: Optional[float] = None, 
-                     axis: str = 'x'):
-    """Sets the wavelength range of a pyqtgraph PlotWidget."""
-    xmin = None
-    xmax = None
-    
-    if axis == 'x':
-        x = 0
-    elif axis == 'y':
-        x = 1
-    else:
-        print(f"Error: Invalid axis '{axis}'. Must be 'x' or 'y'.")
-        return
-
-    if min_val is not None and max_val is not None:
-        if min_val < max_val:
-            xmin, xmax = min_val, max_val
-        elif min_val == max_val:
-            xmin, xmax = min_val - 0.5, max_val + 0.5 # Small range for single value
-            print("Warning: wavelength min is equal to wavelength max.")
-        else:
-            print("Warning: wavelength min is greater than wavelength max.")
-            return
-    elif min_val is not None:
-        xmax = plot_widget.getViewBox().viewRange()[x][1]
-        xmin = min_val
-    elif max_val is not None:
-        xmin = plot_widget.getViewBox().viewRange()[x][0]
-        xmax = max_val
-    else:
-        # Reset to full range if no valid min or max provided
-        if len(wavelength) > 0:
-            xmin, xmax = wavelength.min(), wavelength.max()
-        else:
-            print("Warning: Cannot set wavelength range, no wavelength data available.")
-            return
-
-    if xmin is not None and xmax is not None:
-        if axis == 'x':
-            plot_widget.setXRange(xmin, xmax, padding=0)
-        elif axis == 'y':
-            plot_widget.setYRange(xmin, xmax, padding=0)
-        else:
-            # This case should ideally be caught earlier
-            print(f"Error: Invalid axis '{axis}'. Must be 'x' or 'y'.")
-
-def ResetPlotXlamRange(plot_widget: pg.PlotWidget, wavelength: np.ndarray, axis: str = 'x'):
-    """Resets the x-axis range of a pyqtgraph PlotWidget to the full wavelength range."""
-    if len(wavelength) > 0:
-        if axis == 'x':
-            plot_widget.setXRange(wavelength.min(), wavelength.max(), padding=0)
-        elif axis == 'y':
-            plot_widget.setYRange(wavelength.min(), wavelength.max(), padding=0)
-        else:
-            print(f"Error: Invalid axis '{axis}'. Must be 'x' or 'y'.")
-    else:
-        print("Warning: Cannot reset wavelength range, no wavelength data available.")
-        
-def update_crosshair_from_mouse(plot_item: pg.PlotItem, v_line: pg.InfiniteLine, h_line: pg.InfiniteLine, pos: QtCore.QPointF):
-    """Updates the crosshair position based on the mouse position."""
-    if plot_item.sceneBoundingRect().contains(pos):
-        mousePoint = plot_item.vb.mapSceneToView(pos)
-        xpos, ypos = mousePoint.x(), mousePoint.y()
-        v_line.setPos(xpos)
-        h_line.setPos(ypos)
-        return xpos, ypos
-    return None, None
-
-def ExampleData() -> np.ndarray:
-    """
-    Generates example Stokes spectropolarimetric data with defined structure.
-    Returns:
-        data (np.ndarray): Stokes data cube of shape (N_STOKES, N_WL, N_X)
-    """
-    print("Generating random test data...")
-
-    # Define dimensions
-    N_STOKES, N_WL, N_X = 4, 250, 150
-
-    # Initialize data with random noise
-    data = np.random.random(size=(N_STOKES, N_WL, N_X)) * 5
-
-    # Define Gaussian parameters for Stokes I
-    center_wl, center_x = N_WL // 2, N_X // 2
-    width_wl, width_x = N_WL // 10, N_X // 8
-
-    # Create 2D spatial Gaussian and add to Stokes I
-    yy, xx = np.mgrid[:N_WL, :N_X]
-    spatial_gaussian = np.exp(-(((xx - center_x) / width_x) ** 2) / 2)
-    data[0] += 10 * spatial_gaussian
-
-    # Create 1D spectral Gaussian and apply to Stokes I
-    spectral_gaussian = np.exp(-((np.arange(N_WL) - center_wl) / width_wl) ** 2 / 2)
-    data[0] *= spectral_gaussian[:, np.newaxis]
-    data[1, center_wl, center_x - 5 : center_x + 5] += 3
-    return data
-
-def InitializeImageplotItem(item: pg.PlotItem, yvalues: bool = True, x_label: str = "x",
-                            y_label: str = "y", x_units: str = "x", y_units: str = "pixel"):
-    """Initializes common properties for image PlotItems."""
-    for axis_name in ['left', 'bottom', 'top']:
-        axis = item.getAxis(axis_name)
-        axis.enableAutoSIPrefix(False) # Disable auto SI prefix for all relevant axes
-        if axis_name == 'left':
-            axis.setWidth(42)
-        else: # 'bottom' and 'top'
-            axis.setHeight(15)
-
-    item.setLabel("bottom", text=x_label, units=x_units)
-    item.setLabel("left", text=y_label, units=y_units)
-
-    item.showAxes(True, showValues=(yvalues, True, False, False), size=15)
-    item.setDefaultPadding(0.0)
-    item.invertY(False)
-
-def InitializeSpectrumplotItem(plot: pg.PlotItem, y_label: str = "", x_label: str = "λ", x_units: str = "pixel"):
-    """Initializes common properties for spectrum PlotItems."""
-
-    plot.invertY(False)  # Orient y axis to run bottom-to-top
-    plot.setDefaultPadding(0.0) # Plot without padding data range
-    plot.showAxes(True, showValues=(True, True, False, False), size=15)
-
-    left_axis = plot.getAxis('left')
-    bottom_axis = plot.getAxis('bottom')
-    top_axis = plot.getAxis('top')
-
-    for axis in [left_axis, bottom_axis, top_axis]:
-        axis.enableAutoSIPrefix(False)
-
-    left_axis.setWidth(40)
-    left_axis.setStyle(autoExpandTextSpace=True, hideOverlappingLabels=True)
-
-    plot.setLabel("bottom", text=x_label, units=x_units)
-    if y_label: # Only set left label if a y_label is provided
-        plot.setLabel("left", text=y_label)
-
-def ValidateData(data):
-    max_dim=10
-    if data.ndim != 3 or data.shape[0] > max_dim:
-        print(f"Error: Data shape mismatch. Expected (<10, N_wl, N_x), got {data.shape}")
-        # Optionally: Create placeholder data or raise an error
-        n_wl_dummy, n_x_dummy = 50, 10
-        data = np.random.random(size=(4, n_wl_dummy, n_x_dummy))
-        print("Using dummy data instead.")
-        
-    names = [str(i) for i in range(1, data.shape[0] + 1)]
-    return(data, names)
 
 # --- PlotControlWidget ---
 class PlotControlWidget(QtWidgets.QWidget):
@@ -546,7 +328,7 @@ class PlotControlWidget(QtWidgets.QWidget):
         self.limits_layout = QtWidgets.QVBoxLayout(limits_content_widget)
         self.limits_dock.addWidget(limits_content_widget)
 
-        self._init_wavelength_range_controls(self.limits_layout)
+        self._init_spectral_range_controls(self.limits_layout)
 
         # --- Widgets for the "lines" dock ---
         self.lines_content_widget = LinesControlGroup(self) # Instance of LinesControlGroup
@@ -557,23 +339,23 @@ class PlotControlWidget(QtWidgets.QWidget):
         self.lines_content_widget.toggleAvgXSync.connect(self._handle_avg_x_sync_toggle)
         self.lines_content_widget.toggleAvgYSync.connect(self._handle_avg_y_sync_toggle)
 
-    def _init_wavelength_range_controls(self, parent_layout: QtWidgets.QVBoxLayout):
-        """Initializes controls for wavelength (wavelength) axis limits, now taking a parent layout."""
-        wavelength_group_box = QtWidgets.QGroupBox("λ axis limits")
-        limits_wavelength_layout = QtWidgets.QVBoxLayout(wavelength_group_box)
+    def _init_spectral_range_controls(self, parent_layout: QtWidgets.QVBoxLayout):
+        """Initializes controls for spectral axis limits, now taking a parent layout."""
+        spectral_group_box = QtWidgets.QGroupBox("spectral axis limits")
+        limits_spectral_layout = QtWidgets.QVBoxLayout(spectral_group_box)
 
         for limit_type in ['min', 'max']:
             label, edit, layout = CreateWlLimitLabel(limit_type)
-            setattr(self, f'wavelength_{limit_type}_label', label)
-            setattr(self, f'wavelength_{limit_type}_edit', edit)
-            edit.editingFinished.connect(self._wavelength_range_changed)
-            limits_wavelength_layout.addLayout(layout)
+            setattr(self, f'spectral_{limit_type}_label', label)
+            setattr(self, f'spectral_{limit_type}_edit', edit)
+            edit.editingFinished.connect(self._spectral_range_changed)
+            limits_spectral_layout.addLayout(layout)
 
-        self.reset_wavelength_button = QtWidgets.QPushButton("Reset wavelength range")
-        self.reset_wavelength_button.clicked.connect(self.resetXlamRangeRequested.emit)
-        limits_wavelength_layout.addWidget(self.reset_wavelength_button)
+        self.reset_spectral_button = QtWidgets.QPushButton("Reset spectral range")
+        self.reset_spectral_button.clicked.connect(self.resetXlamRangeRequested.emit)
+        limits_spectral_layout.addWidget(self.reset_spectral_button)
 
-        parent_layout.addWidget(wavelength_group_box)
+        parent_layout.addWidget(spectral_group_box)
         parent_layout.addStretch(1)
 
     def init_spectrum_limit_controls(self, spectra_widgets: List['StokesSpectrumWindow'],
@@ -585,24 +367,26 @@ class PlotControlWidget(QtWidgets.QWidget):
 
         for i, spectrum_widget in enumerate(self.spectra_widgets):
             spectrum_image_widget = self.spectrum_image_widgets[i] if i < len(self.spectrum_image_widgets) else None
+            spatial_widget = self.spatial_widgets[i] if i < len(self.spatial_widgets) else None
             if spectrum_image_widget is None:
                 continue
 
             limit_group = SpectrumLimitControlGroup(
                 stokes_name=spectrum_widget.name,
                 spectrum_widget=spectrum_widget,
-                spectrum_image_widget=spectrum_image_widget
+                spectrum_image_widget=spectrum_image_widget,
+                spatial_widget=spatial_widget
             )
 
             self.limits_layout.addWidget(limit_group)
 
-    def _wavelength_range_changed(self):
+    def _spectral_range_changed(self):
         parsed_values = {}
         error_flag = False
 
         try:
             for limit_type in ['min', 'max']:
-                edit_widget = getattr(self, f'wavelength_{limit_type}_edit')
+                edit_widget = getattr(self, f'spectral_{limit_type}_edit')
                 text = edit_widget.text()
                 try:
                     parsed_values[limit_type] = float(text) if text else None
@@ -613,24 +397,24 @@ class PlotControlWidget(QtWidgets.QWidget):
                     break
 
             if error_flag:
-                print("Warning: Invalid λ range entered (non-numeric).")
+                print("Warning: Invalid spectral range entered (non-numeric).")
                 return
 
             min_val = parsed_values.get('min')
             max_val = parsed_values.get('max')
 
             if min_val is not None and max_val is not None and min_val >= max_val:
-                print("Warning: λ min should be less than λ max.")
-                self.wavelength_min_edit.setStyleSheet("background-color: red;")
-                self.wavelength_max_edit.setStyleSheet("background-color: red;")
+                print("Warning: spectral min should be less than spectral max.")
+                self.spectral_min_edit.setStyleSheet("background-color: red;")
+                self.spectral_max_edit.setStyleSheet("background-color: red;")
                 return
 
-            self.wavelength_min_edit.setStyleSheet("")
-            self.wavelength_max_edit.setStyleSheet("")
+            self.spectral_min_edit.setStyleSheet("")
+            self.spectral_max_edit.setStyleSheet("")
             self.xlamRangeChanged.emit(min_val, max_val)
 
         except Exception as e:
-            print(f"An unexpected error occurred in _wavelength_range_changed: {e}")
+            print(f"An unexpected error occurred in _spectral_range_changed: {e}")
 
     @QtCore.pyqtSlot(bool)
     def _handle_crosshair_sync_toggle(self, checked: bool):
@@ -639,7 +423,7 @@ class PlotControlWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(bool)
     def _handle_avg_x_sync_toggle(self, checked: bool):
-        """Slot to receive and handle the wavelength average sync toggle state."""
+        """Slot to receive and handle the spectral average sync toggle state."""
         self.sync_avg_x = checked
 
     @QtCore.pyqtSlot(bool)
@@ -671,14 +455,14 @@ class PlotControlWidget(QtWidgets.QWidget):
                 corresponding_img_widget = self.spectrum_image_widgets[spec_idx]
 
                 if spec_idx == source_stokes_index:
-                    spec_widget.update_wavelength_line(xpos)
+                    spec_widget.update_spectral_line(xpos)
                     spec_widget.update_spectrum_data(index_x)
                 elif not corresponding_img_widget.crosshair_locked:
-                    spec_widget.update_wavelength_line(xpos)
+                    spec_widget.update_spectral_line(xpos)
                     spec_widget.update_spectrum_data(index_x)
 
         else:
-            source_spectrum_widget.update_wavelength_line(xpos)
+            source_spectrum_widget.update_spectral_line(xpos)
             source_spectrum_widget.update_spectrum_data(index_x)
 
     @QtCore.pyqtSlot(float, float, float, int)
@@ -698,19 +482,20 @@ class PlotControlWidget(QtWidgets.QWidget):
         # If the sync affects this behavior, you'd add an 'if self.sync_avg_x:' condition here.
         source_spatial_widget.update_spatial_data_wl_avg(index_wl_l, index_wl_c , index_wl_h)
 
-      
+ 
 # --- Data Display Widgets ---
 
 class StokesSpatialWindow(BasePlotWidget):
     
     xChanged = QtCore.pyqtSignal(float) # Emit x value of hLine
+    hLineChanged = QtCore.pyqtSignal(float) # Emit when horizontal line position changes
 
     def __init__(self, data: np.ndarray, stokes_index: int, name: str):
         super().__init__(None)
 
         self.name = name + " spatial"
-        self.full_data = data  # Store the full (wl, x) data
-        self.wavelength = np.arange(self.full_data.shape[0])
+        self.full_data = data  # Store the full (spectral, x) data
+        self.spectral = np.arange(self.full_data.shape[0])
         self.x = np.arange(self.full_data.shape[1])
 
         self._setup_plot_items()
@@ -735,6 +520,7 @@ class StokesSpatialWindow(BasePlotWidget):
     def _setup_connections(self):
         """Connects signals to slots."""
         self.hLine.sigPositionChanged.connect(self._on_hline_moved)
+        self.hLine.sigPositionChanged.connect(self._emit_hline_changed)
 
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
@@ -749,7 +535,7 @@ class StokesSpatialWindow(BasePlotWidget):
     def _update_label(self):
         """Updates the coordinate label."""
         y_value = self.hLine.value()
-        # Find the closest index to the current wavelength value
+        # Find the closest index to the current spectral value
         y_idx = np.argmin(np.abs(self.x - y_value)) if self.x.size > 0 else -1
         intensity_value = np.nan
         if isinstance(self.plot_data, np.ndarray) and self.plot_data.ndim == 1 and 0 <= y_idx < self.plot_data.size:
@@ -760,7 +546,7 @@ class StokesSpatialWindow(BasePlotWidget):
     # def _update_label_wl_avg(self):
     #         """Updates the coordinate label for avaraged region."""
     #         x_value = self.current_wl_idx_avg
-    #         # Find the closest index to the current wavelength value
+    #         # Find the closest index to the current spectral value
     #         x_idx = np.argmin(np.abs(self.wavelength - x_value)) if self.wavelength.size > 0 else -1
     #         intensity_value = np.nan
     #         if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data.ndim == 1 and 0 <= x_idx < self.plot_data_avg.size:
@@ -807,24 +593,57 @@ class StokesSpatialWindow(BasePlotWidget):
     def _update_label_wl_avg(self):
                 """Updates the coordinate label for avaraged region."""
                 wl_value = self.current_wl_idx_avg
-                # Find the closest index to the current wavelength value
-                x_idx = np.argmin(np.abs(self.x - wl_value)) if self.wavelength.size > 0 else -1
-                intensity_value = np.nan
-                if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data.ndim == 1 and 0 <= wl_idx < self.plot_data_avg.size:
-                    intensity_value = self.plot_data_avg[wl_idx]
-
-                self.label_avg.setText(f"λ={wl_value:.1f}, z={intensity_value:.5f}", size='6pt')
+                # Find the closest index to the current spectral value
+                x_idx = np.argmin(np.abs(self.x - self.hLine.value()))
+                x_value = self.x[x_idx]
+                self.label_avg.setText(f"wl avg: {wl_value:.1f}, x: {x_value:.1f}")
+    
+    def _emit_hline_changed(self):
+        """Emit signal when horizontal line position changes."""
+        self.hLineChanged.emit(self.hLine.value())
+    
+    @QtCore.pyqtSlot(float, float, int)
+    def update_from_spectrum_crosshair(self, xpos_wl: float, ypos_spatial_x: float, source_stokes_index: int):
+        """Update spatial window based on crosshair movement in spectrum image."""
+        # Update horizontal line position to match spectrum image crosshair
+        self.hLine.blockSignals(True)  # Prevent feedback loop
+        self.hLine.setPos(ypos_spatial_x)
+        self.hLine.blockSignals(False)
+        
+        # Update spatial data slice based on vertical line (spectral) position
+        spectral_idx = np.clip(int(np.round(xpos_wl)), 0, self.full_data.shape[0] - 1)
+        self.update_spatial_data_spectral(spectral_idx)
+    
+    def update_spatial_data_spectral(self, spectral_idx: int):
+        """Update spatial data based on spectral index."""
+        if not (0 <= spectral_idx < self.full_data.shape[0]):
+            print(f"Error: Provided spectral_idx {spectral_idx} is out of bounds for data with {self.full_data.shape[0]} spectral pixels.")
+            return
+        
+        self.current_spectral_idx = spectral_idx
+        self.plot_data = self.full_data[spectral_idx, :]
+        self.plot_curve.setData(self.plot_data, self.x)
+        self._update_label_spectral()
+    
+    def _update_label_spectral(self):
+        """Updates the coordinate label for single spectral slice."""
+        spectral_value = self.current_spectral_idx
+        # Find the closest index to the current spatial position
+        x_idx = np.argmin(np.abs(self.x - self.hLine.value()))
+        x_value = self.x[x_idx]
+        intensity_value = self.plot_data[x_idx] if hasattr(self, 'plot_data') and x_idx < len(self.plot_data) else np.nan
+        self.label.setText(f"spectral: {spectral_value:.1f}, x: {x_value:.1f}, z: {intensity_value:.5f}")
 
 class StokesSpectrumWindow(BasePlotWidget):
     yRangeChanged = QtCore.pyqtSignal(tuple)  # Emit (min, max)
-    wavelengthChanged = QtCore.pyqtSignal(float) # Emit wavelength value
+    spectralChanged = QtCore.pyqtSignal(float) # Emit spectral value
 
     def __init__(self, data: np.ndarray, stokes_index: int, name: str):
         super().__init__(None)
 
         self.name = name + " spectrum"
-        self.full_data = data  # Store the full (wl, x) data
-        self.wavelength = np.arange(self.full_data.shape[0])
+        self.full_data = data  # Store the full (spectral, x) data
+        self.spectral = np.arange(self.full_data.shape[0])
 
         self._setup_plot_items()
         self._setup_connections()
@@ -835,8 +654,8 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plot_curve = pg.PlotDataItem() 
         self.plotItem.addItem(self.plot_curve)
         
-        self.plot_curve_wl_avg = pg.PlotDataItem(pen=pg.mkPen(AVG_COLORS[1], style=QtCore.Qt.SolidLine, width=2)) 
-        self.plotItem.addItem(self.plot_curve_wl_avg)
+        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(AVG_COLORS[1], style=QtCore.Qt.SolidLine, width=2)) 
+        self.plotItem.addItem(self.plot_curve_spectral_avg)
 
         self.vLine = AddLine(self.plotItem, CROSSHAIR_COLORS['h_spectrum_image'], 90, moveable=True)
 
@@ -853,32 +672,32 @@ class StokesSpectrumWindow(BasePlotWidget):
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
         self.plot_data = self.full_data[:, self.current_x_idx]
-        self.plot_curve.setData(self.wavelength, self.plot_data)
-        self.plot_curve.setData(self.wavelength, 0*self.plot_data)
+        self.plot_curve.setData(self.spectral, self.plot_data)
+        self.plot_curve.setData(self.spectral, 0*self.plot_data)
 
         # Emit initial Y range and update label
         self._emit_y_range_changed(None, self.plotItem.viewRange()[1])
 
         # Set initial vLine position
-        initial_wl = self.wavelength[0] if self.wavelength.size > 0 else 0
-        self.update_wavelength_line(initial_wl) 
+        initial_spectral = self.spectral[0] if self.spectral.size > 0 else 0
+        self.update_spectral_line(initial_spectral) 
 
     def _update_label(self):
         """Updates the coordinate label."""
-        wl_value = self.vLine.value()
-        # Find the closest index to the current wavelength value
-        wl_idx = np.argmin(np.abs(self.wavelength - wl_value)) if self.wavelength.size > 0 else -1
+        spectral_value = self.vLine.value()
+        # Find the closest index to the current spectral value
+        spectral_idx = np.argmin(np.abs(self.spectral - spectral_value)) if self.spectral.size > 0 else -1
         intensity_value = np.nan
-        if isinstance(self.plot_data, np.ndarray) and self.plot_data.ndim == 1 and 0 <= wl_idx < self.plot_data.size:
-            intensity_value = self.plot_data[wl_idx]
+        if isinstance(self.plot_data, np.ndarray) and self.plot_data.ndim == 1 and 0 <= spectral_idx < self.plot_data.size:
+            intensity_value = self.plot_data[spectral_idx]
 
-        self.label.setText(f"λ={wl_value:.1f}, z={intensity_value:.5f}", size='6pt')
+        self.label.setText(f"spectral={spectral_value:.1f}, z={intensity_value:.5f}", size='6pt')
         
     def _update_label_x_avg(self):
             """Updates the coordinate label for avaraged region."""
             wl_value = self.current_x_idx_avg
-            # Find the closest index to the current wavelength value
-            wl_idx = np.argmin(np.abs(self.wavelength - wl_value)) if self.wavelength.size > 0 else -1
+            # Find the closest index to the current spectral value
+            wl_idx = np.argmin(np.abs(self.spectral - wl_value)) if self.spectral.size > 0 else -1
             intensity_value = np.nan
             if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data.ndim == 1 and 0 <= wl_idx < self.plot_data_avg.size:
                 intensity_value = self.plot_data_avg[wl_idx]
@@ -888,31 +707,31 @@ class StokesSpectrumWindow(BasePlotWidget):
     def _on_vline_moved(self):
         """Handles internal vLine movement and emits signal."""
         current_wl = self.vLine.value()
-        self.wavelengthChanged.emit(current_wl)
+        self.spectralChanged.emit(current_wl)
         self._update_label()
 
-    def update_wavelength_range(self, min_val: Optional[float], max_val: Optional[float]):
-        """Updates the λ-axis range of the spectrum plot."""
-        SetPlotXlamRange(self.plotItem, self.wavelength, min_val, max_val, axis='x')
-
-    def reset_wavelength_range(self):
-        """Resets the λ-axis range to the initial maximum range."""
-        ResetPlotXlamRange(self.plotItem, self.wavelength, axis='x')
+    def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
+        """Updates the spectral-axis range of the spectrum plot."""
+        SetPlotXlamRange(self.plotItem, self.spectral, min_val, max_val, axis='x')
+    
+    def reset_spectral_range(self):
+        """Resets the spectral-axis range to the initial maximum range."""
+        ResetPlotXlamRange(self.plotItem, self.spectral, axis='x')
 
     def _emit_y_range_changed(self, axis, limits):
         """Emits the current Y-axis range."""
         self.yRangeChanged.emit(tuple(limits))
 
     @QtCore.pyqtSlot(float)
-    def update_wavelength_line(self, wavelength: float):
-        """Slot to update the vLine position from external signal."""
-        if hasattr(self, 'vLine'):
-            # Only update if the value is significantly different to avoid unnecessary updates
-            if not np.isclose(self.vLine.value(), wavelength):
-                self.vLine.setValue(wavelength)
+    def update_spectral_line(self, spectral_position: float):
+        """Updates the vertical line position to the given spectral position."""
+        try:
+            # Update the vertical line position if it exists
+            if not np.isclose(self.vLine.value(), spectral_position):
+                self.vLine.setValue(spectral_position)
                 self._update_label()
-        else:
-            print("Warning: update_wavelength_line called before vLine was initialized.")
+        except AttributeError:
+            print("Warning: update_spectral_line called before vLine was initialized.")
 
     def update_spectrum_data(self, x_idx: int):
         """Updates the plotted spectrum data based on a new spatial index."""
@@ -922,7 +741,7 @@ class StokesSpectrumWindow(BasePlotWidget):
 
         self.current_x_idx = x_idx
         self.plot_data = self.full_data[:, self.current_x_idx]
-        self.plot_curve.setData(self.wavelength, self.plot_data)
+        self.plot_curve.setData(self.spectral, self.plot_data)
         self._update_label() # Update label after data change    
 
     def update_spectrum_data_x_avg(self, x_idx_l: int, x_idx_c: int , x_idx_h: int):
@@ -943,8 +762,8 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.stokes_index = stokes_index
         self.name = name
         self.data = data
-        self.n_wl, self.n_x_pixel = self.data.shape 
-        self.wavelengths = np.arange(self.n_wl) 
+        self.n_spectral, self.n_x_pixel = self.data.shape 
+        self.spectral_pixels = np.arange(self.n_spectral) 
         self.spatial_pixels = np.arange(self.n_x_pixel) 
 
         self._setup_image_plot()
@@ -957,14 +776,18 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.plotItem.addItem(self.image_item)
         self.histogram = CreateHistrogram(self.image_item, self.layout)
 
-        self.image_item.setImage(self.data.T) # <--- Transpose the data here for plotting wavelength along x axis!
+        self.image_item.setImage(self.data.T) # <--- Transpose the data here for plotting spectral along x axis!
 
-        x_min_wl = self.wavelengths[0] if self.wavelengths.size > 0 else 0
-        x_max_wl = self.wavelengths[-1] if self.wavelengths.size > 0 else self.n_wl
+        x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
+        x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
         y_min_x = self.spatial_pixels[0] if self.spatial_pixels.size > 0 else 0
         y_max_x = self.spatial_pixels[-1] if self.spatial_pixels.size > 0 else self.n_x_pixel
 
         self.image_item.setRect(x_min_wl, y_min_x, x_max_wl - x_min_wl, y_max_x - y_min_x)
+        
+        # Add yellow label for lambda center and limits (replaces averaging label)
+        self.lambda_label = pg.LabelItem(justify='left', size='6pt', color=AVG_COLORS[1])
+        self.graphics_widget.addItem(self.lambda_label, row=1, col=1)
 
         self.plotItem.setMenuEnabled(False)
         self.plotItem.vb.mouseButtons = {
@@ -1154,6 +977,9 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             self.line1.setValue(new_l1)
             self.line2.setValue(new_l2)
             self.center_line.setValue((new_l1 + new_l2) / 2)
+        
+            # Update lambda label with center and limits
+            self._update_lambda_label(new_l1, (new_l1 + new_l2) / 2, new_l2)
 
             self.avgRegionChanged.emit(new_l1, (new_l1 + new_l2) / 2, new_l2, self.stokes_index)
 
@@ -1211,17 +1037,17 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             self.updateLabelFromCrosshair(*self.last_valid_crosshair_pos)
 
     def updateLabelFromCrosshair(self, xpos_wl: float, ypos_spatial_x: float):
-        index_wl = np.clip(int(np.round(xpos_wl)), 0, self.n_wl - 1)
+        index_spectral = np.clip(int(np.round(xpos_wl)), 0, self.n_spectral - 1)
         index_x = np.clip(int(np.round(ypos_spatial_x)), 0, self.n_x_pixel - 1)
 
-        intensity = self.data[index_wl, index_x] 
-        self.label.setText(f"λ={xpos_wl:.1f}, x={ypos_spatial_x:.2f}, z={intensity:.5f}", size='6pt') 
+        intensity = self.data[index_spectral, index_x] 
+        self.label.setText(f"spectral={xpos_wl:.1f}, x={ypos_spatial_x:.2f}, z={intensity:.5f}", size='6pt') 
 
-    def update_wavelength_range(self, min_val, max_val):
-        SetPlotXlamRange(self.plotItem, self.wavelengths, min_val, max_val, axis='x') 
+    def update_spectral_range(self, min_val, max_val):
+        SetPlotXlamRange(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x') 
 
-    def reset_wavelength_range(self):
-        ResetPlotXlamRange(self.plotItem, self.wavelengths, axis='x') 
+    def reset_spectral_range(self):
+        ResetPlotXlamRange(self.plotItem, self.spectral_pixels, axis='x') 
 
     def updateExternalVLine(self, xpos_wl: float): 
         if not self.crosshair_locked:
@@ -1237,130 +1063,20 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             self.hLine.setPos(ypos_spatial_x)
             self.updateLabelFromCrosshair(xpos_wl, ypos_spatial_x)
             self.last_valid_crosshair_pos = (xpos_wl, ypos_spatial_x)
-       
-# --- Main Application Setup ---
-
-def display_data(data: np.ndarray, title: str = 'Data Viewer'):
-    """
-    Main function to create and display the interactive data viewer.
-
-    Args:
-        data: Numpy array of shape (N_Stokes, N_wl, N_x) containing Stokes data.
-        title: Window title.
-    """  
-    app = pg.mkQApp("Data viewer")
-    win = QtWidgets.QMainWindow()
-    area = DockArea()
-    win.setCentralWidget(area)
-    win.resize(1700, 800)
-    win.setWindowTitle(title)
-
-    # --- Data Validation ---
-    data, STOKES_NAMES = ValidateData(data)
     
-    # --- Widget Initialization ---
-    control_widget = PlotControlWidget() # Create control widget first
-
-    spectra: List[StokesSpectrumWindow] = []
-    image_spectra: List[StokesSpectrumImageWindow] = []
-    spatial: List[StokesSpatialWindow] = []
-    docks: Dict[str, Dict[str, Dock]] = {"spectrum": {}, "spec_img": {}, "spatial": {}} # Store docks by type and name
-
-     # --- Create Widgets and Docks in a Loop ---
-    for i, name in enumerate(STOKES_NAMES):
-         base_name = name # dock names
-         stokes_data_y_wl_x = data[i, :, :] # Shape ( wl, x)
-
-         # Create Widgets for this Stokes parameter
-         initial_spec_img_data = data[i, :, :] 
-
-         win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
-         win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
-         win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
-
-         # Append to lists
-         spectra.append(win_spectrum)
-         image_spectra.append(win_image_spectrum)
-         spatial.append(win_spatial)
-         
-         # Create Docks
-         spectrum_dock = Dock(f"{base_name} spectrum", size=(350, 150))
-         spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(350, 150))
-         spatial_dock = Dock(f"{base_name} spatial", size=(250, 150))
-
-         # Add Widgets to Docks
-         spectrum_dock.addWidget(win_spectrum)
-         spectrum_image_dock.addWidget(win_image_spectrum)
-         spatial_dock.addWidget(win_spatial)
-
-         # Store Docks
-         docks["spectrum"][base_name] = spectrum_dock
-         docks["spec_img"][base_name] = spectrum_image_dock
-         docks["spatial"][base_name] = spatial_dock
-
-    # Update control widget with the created image and spectrum widgets
-    control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial) # Now initialize UI for limits
-       
-    # --- Create Control and Data Docks ---
-    control_dock = Dock("Control", size=(70,1000))
-    data_dock = Dock("Data", size=(70,1000))
+    @QtCore.pyqtSlot(float)
+    def update_horizontal_crosshair(self, ypos_spatial_x: float):
+        """Update only the horizontal crosshair line from spatial window."""
+        if not self.crosshair_locked:
+            self.hLine.blockSignals(True)  # Prevent feedback loop
+            self.hLine.setPos(ypos_spatial_x)
+            self.hLine.blockSignals(False)
+            # Update label with current crosshair position
+            if self.last_valid_crosshair_pos:
+                self.updateLabelFromCrosshair(self.last_valid_crosshair_pos[0], ypos_spatial_x)
+                self.last_valid_crosshair_pos = (self.last_valid_crosshair_pos[0], ypos_spatial_x)
     
-    # --- Arrange Docks in the DockArea ---
-    
-    for i, name in enumerate(STOKES_NAMES):
-        base_name = name.split('/')[0]
-        if name == STOKES_NAMES[0]: # first one always on the left
-            area.addDock(docks["spec_img"][base_name], 'left')
-        else:
-            area.addDock(docks["spec_img"][base_name], 'bottom', docks["spec_img"][STOKES_NAMES[i-1].split('/')[0]])
-    
-    # Middle Column: Spectrum Images and Spectra
- 
-    for i, name in enumerate(STOKES_NAMES):
-         base_name = name.split('/')[0]
-         # Add spectrum and spatial
-         area.addDock(docks["spectrum"][base_name], 'right', docks["spec_img"][base_name])
-         area.addDock(docks["spatial"][base_name], 'right', docks["spectrum"][base_name])
-
-    # Bottom Row: Average Spectrum
-    area.addDock(data_dock, 'right')
-    area.addDock(control_dock, 'above', data_dock)
-
-    # Control widget
-    control_dock.addWidget(control_widget)
-    #data_dock.addWidget()
-    
-    # --- Connect Signals in a Loop ---
-
-    for i in range(len(image_spectra)):        
-        image_spectra[i].crosshairMoved.connect(control_widget.handle_crosshair_movement)
-        image_spectra[i].avgRegionChanged.connect(control_widget.handle_v_avg_line_movement)
-    pass
-    
-    # Connect the xlamRangeChanged signal 
-
-    for spectrum_widget in spectra:
-        control_widget.xlamRangeChanged.connect(spectrum_widget.update_wavelength_range)
-        control_widget.resetXlamRangeRequested.connect(spectrum_widget.reset_wavelength_range)
-    for image_spectrum_widget in image_spectra:
-        control_widget.xlamRangeChanged.connect(image_spectrum_widget.update_wavelength_range)
-        control_widget.resetXlamRangeRequested.connect(image_spectrum_widget.reset_wavelength_range)
-
-    # --- Show Window and Run App ---
-    win.show()
-    try:
-        # Use environment variable or default to dark style
-        dark_stylesheet = qdarkstyle.load_stylesheet_from_environment(is_pyqtgraph=True)
-        app.setStyleSheet(dark_stylesheet)
-    except ImportError:
-        print("qdarkstyle not found. Using default Qt style.")
-    except Exception as e:
-        print(f"Could not apply qdarkstyle: {e}")
-
-    sys.exit(app.exec_()) # Use sys.exit for proper exit codes
-
-if __name__ == '__main__':
-    
-    # Example data for display
-    data = ExampleData() #N_Stokes, N_wl, N_x
-    display_data(data, title='Test data')
+    def _update_lambda_label(self, left_limit: float, center: float, right_limit: float):
+        """Update the yellow lambda label with center and limits of averaged region."""
+        if hasattr(self, 'lambda_label'):
+            self.lambda_label.setText(f"λ: {left_limit:.1f} | {center:.1f} | {right_limit:.1f}")
