@@ -72,7 +72,7 @@ Spectator is a sophisticated spectral data viewer designed to replace IDL Z3show
 
 **Run the example application:**
 ```bash
-conda activate dkist
+conda activate spectator
 python examples/spectator_example.py
 ```
 
