@@ -214,11 +214,11 @@ class SpectrumLimitControlGroup(BaseControlWidget):
                 )
         else:
             self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=True)
-            self.spectrum_widget.plotItem.autoRange(y=True)
+            self.spectrum_widget.plotItem.autoRange()
             # Re-enable auto-range for spatial window x-axis
             if self.spatial_widget:
                 self.spatial_widget.plotItem.enableAutoRange(axis='x', enable=True)
-                self.spatial_widget.plotItem.autoRange(x=True)
+                self.spatial_widget.plotItem.autoRange()
             
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 # Disconnect the signal
@@ -409,8 +409,8 @@ class PlotControlWidget(QtWidgets.QWidget):
     def _wavelength_range_changed(self):
         """Handle wavelength range change."""
         try:
-            min_val = float(self.min_wavelength_edit.text())
-            max_val = float(self.max_wavelength_edit.text())
+            min_val = float(self.wavelength_min_edit.text())
+            max_val = float(self.wavelength_max_edit.text())
             if min_val < max_val:
                 self.xlamRangeChanged.emit(min_val, max_val)
         except ValueError:

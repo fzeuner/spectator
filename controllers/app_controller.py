@@ -258,20 +258,20 @@ class DataScaler:
         self.target_max_value = 10.0
         self.scale_thresholds = {
             'large': {
-                1e12: (1e-12, -12, "×10⁻¹²"),
-                1e9: (1e-9, -9, "×10⁻⁹"),
-                1e6: (1e-6, -6, "×10⁻⁶"),
-                1e3: (1e-3, -3, "×10⁻³"),
-                100: (1e-2, -2, "×10⁻²"),
-                10: (1e-1, -1, "×10⁻¹"),
+                1e12: (1e-12, -12, "10^-12"),
+                1e9: (1e-9, -9, "10^-9"),
+                1e6: (1e-6, -6, "10^-6"),
+                1e3: (1e-3, -3, "10^-3"),
+                100: (1e-2, -2, "10^-2"),
+                10: (1e-1, -1, "10^-1"),
             },
             'small': {
-                1e-12: (1e12, 12, "×10¹²"),
-                1e-9: (1e9, 9, "×10⁹"),
-                1e-6: (1e6, 6, "×10⁶"),
-                1e-3: (1e3, 3, "×10³"),
-                1e-2: (1e2, 2, "×10²"),
-                1e-1: (1e1, 1, "×10¹"),
+                1e-12: (1e12, 12, "10^12"),
+                1e-9: (1e9, 9, "10^9"),
+                1e-6: (1e6, 6, "10^6"),
+                1e-3: (1e3, 3, "10^3"),
+                1e-2: (1e2, 2, "10^2"),
+                1e-1: (1e1, 1, "10^1"),
             }
         }
     
@@ -314,9 +314,9 @@ class DataScaler:
         
         # Generate appropriate label
         if exponent > 0:
-            label = f"×10{self._format_exponent(exponent)}"
+            label = f"10^{exponent}"
         elif exponent < 0:
-            label = f"×10{self._format_exponent(exponent)}"
+            label = f"10^{exponent}"
         else:
             label = ""
         

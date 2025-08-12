@@ -7,8 +7,9 @@ from typing import List, Tuple, Dict, Optional, Any
 
 from .base_widgets import BasePlotWidget
 from utils.constants import (
-    AVG_COLORS, CROSSHAIR_COLORS, MIN_LINE_DISTANCE
+    MIN_LINE_DISTANCE, ColorSchemes
 )
+from utils.colors import getWidgetColors
 from utils import (
     AddLine, AddCrosshair, CreateHistrogram, 
     InitializeSpectrumplotItem, InitializeImageplotItem,
@@ -37,12 +38,14 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plot_curve = pg.PlotDataItem() 
         self.plotItem.addItem(self.plot_curve)
         
-        self.plot_curve_avg = pg.PlotDataItem(pen=pg.mkPen(AVG_COLORS[1], style=QtCore.Qt.SolidLine, width=2)) 
+        colors = getWidgetColors()
+        self.plot_curve_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_v', 'yellow'), style=QtCore.Qt.SolidLine, width=2)) 
         self.plotItem.addItem(self.plot_curve_avg)
 
-        self.hLine = AddLine(self.plotItem, CROSSHAIR_COLORS['h_spectrum_image'], 0, moveable=True)
+        colors = getWidgetColors()
+        self.hLine = AddLine(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 0, moveable=True)
 
-        self.label_avg = pg.LabelItem(justify='left', size='6pt', color=AVG_COLORS[1])
+        self.label_avg = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         InitializeSpectrumplotItem(self.plotItem, y_label="x", x_label = "", x_units = "", y_units = "pixel")
@@ -75,17 +78,6 @@ class StokesSpatialWindow(BasePlotWidget):
         
         self.label.setText(f"x={spatial_pos:.1f}, z={intensity_value:.5f}", size='6pt')
         
-    # def _update_label_wl_avg(self):
-    #         """Updates the coordinate label for avaraged region."""
-    #         x_value = self.current_wl_idx_avg
-    #         # Find the closest index to the current spectral value
-    #         x_idx = np.argmin(np.abs(self.wavelength - x_value)) if self.wavelength.size > 0 else -1
-    #         intensity_value = np.nan
-    #         if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data.ndim == 1 and 0 <= x_idx < self.plot_data_avg.size:
-    #             intensity_value = self.plot_data_avg[x_idx]
-
-    #         self.label_avg.setText(f"x={x_value:.1f}, z={intensity_value:.5f}", size='6pt')
-
     def _on_hline_moved(self):
         """Handles internal hLine movement and emits signal."""
         current_y = self.hLine.value()
@@ -206,12 +198,14 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plot_curve = pg.PlotDataItem() 
         self.plotItem.addItem(self.plot_curve)
         
-        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(AVG_COLORS[1], style=QtCore.Qt.SolidLine, width=2)) 
+        colors = getWidgetColors()
+        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_h', 'dodgerblue'), style=QtCore.Qt.SolidLine, width=2)) 
         self.plotItem.addItem(self.plot_curve_spectral_avg)
 
-        self.vLine = AddLine(self.plotItem, CROSSHAIR_COLORS['h_spectrum_image'], 90, moveable=True)
+        colors = getWidgetColors()
+        self.vLine = AddLine(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 90, moveable=True)
 
-        self.label_avg = pg.LabelItem(justify='left', size='6pt', color=AVG_COLORS[0])      
+        self.label_avg = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_h', 'dodgerblue'))      
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         InitializeSpectrumplotItem(self.plotItem)
@@ -322,12 +316,13 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     crosshairMoved = QtCore.pyqtSignal(float, float, int)
     avgRegionChanged = QtCore.pyqtSignal(float, float, float, int)
 
-    def __init__(self, data: np.ndarray, stokes_index: int, name: str):
+    def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
         super().__init__(None)
 
         self.stokes_index = stokes_index
         self.name = name
         self.data = data
+        self.scale_info = scale_info
         self.n_spectral, self.n_x_pixel = self.data.shape 
         self.spectral_pixels = np.arange(self.n_spectral) 
         self.spatial_pixels = np.arange(self.n_x_pixel) 
@@ -340,7 +335,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     def _setup_image_plot(self):
         self.image_item = pg.ImageItem()
         self.plotItem.addItem(self.image_item)
-        self.histogram = CreateHistrogram(self.image_item, self.layout)
+        self.histogram = CreateHistrogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
 
         self.image_item.setImage(self.data.T) # <--- Transpose the data here for plotting spectral along x axis!
 
@@ -397,7 +392,8 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.drag_start_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
 
         self._remove_temp_lines()
-        self.temp_line_press = AddLine(self.plotItem, AVG_COLORS[1], 90, pos=self.drag_start_pos.x(), style=QtCore.Qt.DashLine)
+        colors = getWidgetColors()
+        self.temp_line_press = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=self.drag_start_pos.x(), style=QtCore.Qt.DashLine)
 
     def _handleMouseRelease(self, event):
         self.right_button_pressed = False
@@ -431,9 +427,10 @@ class StokesSpectrumImageWindow(BasePlotWidget):
 
             center_wl = (clamped_wl1 + clamped_wl2) / 2 # Recalculate center based on final positions
 
-            self.line1 = AddLine(self.plotItem, AVG_COLORS[1], 90, pos=clamped_wl1, moveable=True, style=QtCore.Qt.SolidLine)
-            self.line2 = AddLine(self.plotItem, AVG_COLORS[1], 90, pos=clamped_wl2, moveable=True, style=QtCore.Qt.SolidLine)
-            self.center_line = AddLine(self.plotItem, AVG_COLORS[1], 90, pos=center_wl, moveable=True, style=QtCore.Qt.DotLine)
+            colors = getWidgetColors()
+            self.line1 = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=clamped_wl1, moveable=True, style=QtCore.Qt.SolidLine)
+            self.line2 = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=clamped_wl2, moveable=True, style=QtCore.Qt.SolidLine)
+            self.center_line = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=center_wl, moveable=True, style=QtCore.Qt.DotLine)
 
             self.line1.sigPositionChanged.connect(self._update_from_line1)
             self.line2.sigPositionChanged.connect(self._update_from_line2)
@@ -457,7 +454,8 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                     self.is_dragging = True
                 if self.is_dragging:
                     if self.temp_line_drag is None:
-                        self.temp_line_drag = AddLine(self.plotItem, AVG_COLORS[1], 90, style=QtCore.Qt.DashLine) # Use AddLine here too
+                        colors = getWidgetColors()
+                        self.temp_line_drag = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, style=QtCore.Qt.DashLine) # Use AddLine here too
                     current_wl = self.plotItem.vb.mapSceneToView(scene_pos).x()
                     self.temp_line_drag.setPos(current_wl)
                 self.updateCrosshairAndLabel(scene_pos)
@@ -572,7 +570,8 @@ class StokesSpectrumImageWindow(BasePlotWidget):
 
     def _setup_crosshair(self):
 
-        self.vLine, self.hLine = AddCrosshair(self.plotItem, CROSSHAIR_COLORS['v'], CROSSHAIR_COLORS['h_spectrum_image'])
+        colors = getWidgetColors()
+        self.vLine, self.hLine = AddCrosshair(self.plotItem, colors.get('crosshair_v', 'white'), colors.get('crosshair_h_spectrum_image', 'white'))
         self.plotItem.scene().sigMouseMoved.connect(self.updateCrosshairAndLabel)
         self.plotItem.scene().sigMouseClicked.connect(self.mouseClicked)
         self.last_valid_crosshair_pos = None

@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import Tuple, Optional
 
-from .constants import CROSSHAIR_COLORS, AVG_COLORS, DEFAULT_LINE_WIDTH
+from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes
 from .colors import getWidgetColors
 
 
@@ -83,36 +83,11 @@ class ScientificAxisItem(pg.AxisItem):
                     strings.append(formatted)
         return strings
 
-def _detect_data_scale(data):
-    """Detect appropriate scale factor for data display."""
-    if data is None or data.size == 0:
-        return 1.0, ""
-    
-    # Get data range, ignoring NaN values
-    valid_data = data[~np.isnan(data)] if hasattr(data, 'size') else data
-    if len(valid_data) == 0:
-        return 1.0, ""
-    
-    data_min, data_max = np.min(valid_data), np.max(valid_data)
-    data_range = max(abs(data_min), abs(data_max))
-    
-    if data_range == 0:
-        return 1.0, ""
-    
-    # Determine appropriate scale factor
-    if data_range >= 1e6:
-        return 1e-6, "×10⁶"
-    elif data_range >= 1e3:
-        return 1e-3, "×10³"
-    elif data_range <= 1e-6:
-        return 1e6, "×10⁻⁶"
-    elif data_range <= 1e-3:
-        return 1e3, "×10⁻³"
-    else:
-        return 1.0, ""
 
 def create_histogram_with_scaling(image_item: pg.ImageItem, 
-                                  layout: QtWidgets.QLayout) -> tuple:
+                                  layout: QtWidgets.QLayout,
+                                  scale_info: dict = None,
+                                  stokes_index: int = None) -> tuple:
     """Creates a histogram with automatic data scaling for better display of scientific values.
     
     Returns:
@@ -133,57 +108,97 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
     histogram.setFixedWidth(60)
     
     # Create a label for the scale factor
-    scale_label = QtWidgets.QLabel("")
-    scale_label.setStyleSheet("""
-        QLabel {
-            color: #FFFFFF;
-            font-size: 8pt;
+    scale_label = QtWidgets.QLabel("1")  # Start with "1" instead of empty string
+    colors = getWidgetColors()
+    scale_label.setStyleSheet(f"""
+        QLabel {{
+            color: {colors.get('foreground', '#FFFFFF')};
+            background-color: {colors.get('background', '#19232D')};
+            font-size: {DEFAULT_LABEL_SIZE};
+            font-weight: normal;
             padding: 2px;
-            background-color: rgba(0, 0, 0, 100);
-            border-radius: 3px;
-        }
+            border-radius: 1px;
+        }}
     """)
     scale_label.setAlignment(QtCore.Qt.AlignCenter)
     scale_label.setMaximumHeight(20)
+    scale_label.setMinimumHeight(20)
     
     # Add widgets to container
     container_layout.addWidget(scale_label)
     container_layout.addWidget(histogram)
     
-    # Function to update scale label based on data range
+    # Function to update scale label based on data model scaling info
     def update_scale_label():
         try:
-            if hasattr(image_item, 'image') and image_item.image is not None:
-                data = image_item.image
-                if data is not None and data.size > 0:
-                    # Get data range, ignoring NaN values
-                    valid_data = data[~np.isnan(data)] if hasattr(data, 'size') else data
-                    if len(valid_data) > 0:
-                        data_min, data_max = np.min(valid_data), np.max(valid_data)
-                        data_range = max(abs(data_min), abs(data_max))
-                        
-                        # Determine if scientific notation is needed
-                        if data_range >= 1e6:
-                            scale_label.setText("×10⁶")
-                        elif data_range >= 1e3:
-                            scale_label.setText("×10³")
-                        elif data_range <= 1e-6:
-                            scale_label.setText("×10⁻⁶")
-                        elif data_range <= 1e-3:
-                            scale_label.setText("×10⁻³")
-                        elif data_range <= 1e-1:
-                            scale_label.setText("×10⁻¹")
+            # First try to use provided scale_info
+            current_scale_info = scale_info
+            
+            # If no scale_info provided, try to get it from global data manager
+            if not current_scale_info:
+                try:
+                    from controllers.app_controller import data_manager
+                    current_scale_info = data_manager.get_current_scale_info()
+                except (ImportError, AttributeError):
+                    current_scale_info = None
+            
+            # Default to "1" - this ensures we always show something
+            label_text = "1"
+            
+            # Use scaling info from data model if available
+            if current_scale_info and isinstance(current_scale_info, dict):
+                labels = current_scale_info.get('labels', {})
+                factors = current_scale_info.get('factors', {})
+                
+                # Use state-specific scaling if stokes_index is provided
+                if stokes_index is not None:
+                    # Try to get the specific label for this state
+                    if labels and stokes_index in labels and labels[stokes_index]:
+                        # Only use the label if it's not empty
+                        label_text = labels[stokes_index]
+                    elif factors and stokes_index in factors:
+                        # Create label from factor for this specific state
+                        factor = factors[stokes_index]
+                        if factor == 1.0:
+                            label_text = "1"
                         else:
-                            scale_label.setText("")  # No scaling needed
-                    else:
-                        scale_label.setText("")
+                            # Convert factor to scientific notation label
+                            exponent = int(np.log10(abs(factor))) if factor != 0 else 0
+                            if exponent != 0:
+                                label_text = f"10^{exponent}"
+                            else:
+                                label_text = "1"
+                    # If no scaling info for this state, label_text remains "1"
                 else:
-                    scale_label.setText("")
-        except Exception:
-            scale_label.setText("")  # Hide on error
+                    # No stokes_index provided, use first available or default behavior
+                    if labels:
+                        # Get the first available non-empty scale label
+                        label_text = next((label for label in labels.values() if label), "1")
+                    elif factors:
+                        # If we have factors but no labels, create a simple label
+                        first_factor = next(iter(factors.values()), 1.0)
+                        if first_factor == 1.0:
+                            label_text = "1"
+                        else:
+                            # Convert factor to scientific notation label
+                            exponent = int(np.log10(abs(first_factor))) if first_factor != 0 else 0
+                            if exponent != 0:
+                                label_text = f"10^{exponent}"
+                            else:
+                                label_text = "1"
+ 
+            scale_label.setText(label_text)
+                
+        except Exception as e:
+            # Always default to "1" on any error
+            scale_label.setText("e")
     
     # Update scale label initially
     update_scale_label()
+    
+    # Connect to image item signals to update scale label when data changes
+    if hasattr(image_item, 'sigImageChanged'):
+        image_item.sigImageChanged.connect(update_scale_label)
     
     # Store update function for later use
     container.update_scale_label = update_scale_label
@@ -193,9 +208,11 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
     return histogram, scale_label
 
 def create_histogram(image_item: pg.ImageItem, 
-                     layout: QtWidgets.QLayout) -> pg.HistogramLUTWidget:
+                     layout: QtWidgets.QLayout,
+                     scale_info: dict = None,
+                     stokes_index: int = None) -> pg.HistogramLUTWidget:
     """Creates and configures a HistogramLUTWidget with automatic scaling display."""
-    histogram, scale_label = create_histogram_with_scaling(image_item, layout)
+    histogram, scale_label = create_histogram_with_scaling(image_item, layout, scale_info, stokes_index)
     return histogram
 
 def initialize_image_plot_item(item: pg.PlotItem, 

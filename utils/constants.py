@@ -7,15 +7,9 @@ parameters used throughout the application.
 
 from typing import Dict, List
 
-# Color definitions for crosshairs and UI elements
-CROSSHAIR_COLORS = {
-    'v': 'white',
-    'h_image': 'dodgerblue', 
-    'h_spectrum_image': 'white'
-}
+# Color definitions for crosshairs and UI elements (moved to color schemes)
 
-# Colors for averaging lines and regions
-AVG_COLORS = ['dodgerblue', 'yellow']
+# Colors for averaging lines and regions (moved to color schemes)
 
 # UI configuration constants
 MIN_LINE_DISTANCE = 2.0  # Minimum pixel distance between averaging lines
@@ -29,7 +23,6 @@ DEFAULT_N_X = 150
 # Plot styling constants
 DEFAULT_LINE_WIDTH = 1.8
 DEFAULT_CROSSHAIR_STYLE = 'DashLine'
-DEFAULT_PLOT_BACKGROUND = 'black'
 
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
@@ -59,8 +52,10 @@ class ColorSchemes:
         'foreground': '#FFFFFF',
         'accent': '#375A7F',
         'crosshair_v': 'white',
-        'crosshair_h': 'dodgerblue',
-        'averaging': 'yellow'
+        'crosshair_h_image': 'dodgerblue',
+        'crosshair_h_spectrum_image': 'white',
+        'averaging_h': 'dodgerblue',
+        'averaging_v': 'yellow'
     }
     
     LIGHT_THEME = {
@@ -68,8 +63,10 @@ class ColorSchemes:
         'foreground': '#000000',
         'accent': '#0078D4',
         'crosshair_v': 'black',
-        'crosshair_h': 'blue',
-        'averaging': 'orange'
+        'crosshair_h_image': 'blue',
+        'crosshair_h_spectrum_image': 'black',
+        'averaging_h': 'blue',
+        'averaging_v': 'orange'
     }
 
 # Gray color palette (from existing getWidgetColors.py)
@@ -114,16 +111,18 @@ class BluePalette:
 
 # Export commonly used constants
 __all__ = [
-    'CROSSHAIR_COLORS',
-    'AVG_COLORS', 
     'MIN_LINE_DISTANCE',
     'DEFAULT_N_STOKES',
-    'DEFAULT_N_WL',
+    'DEFAULT_N_WL', 
     'DEFAULT_N_X',
-    'ColorSchemes',
-    'GrayPalette',
-    'BluePalette',
+    'DEFAULT_LINE_WIDTH',
+    'DEFAULT_CROSSHAIR_STYLE',
+    'DEFAULT_FONT_SIZE',
+    'DEFAULT_LABEL_SIZE',
     'SUPPORTED_VIEWER_TYPES',
     'MAX_STATES',
-    'MAX_SPATIAL_AXES'
+    'MAX_SPATIAL_AXES',
+    'ColorSchemes',
+    'GrayPalette',
+    'BluePalette'
 ]

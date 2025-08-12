@@ -7,7 +7,7 @@ organized by functionality.
 
 # Constants and configuration
 from .constants import (
-    CROSSHAIR_COLORS, AVG_COLORS, MIN_LINE_DISTANCE,
+    MIN_LINE_DISTANCE,
     DEFAULT_N_STOKES, DEFAULT_N_WL, DEFAULT_N_X, 
     DEFAULT_LINE_WIDTH, ColorSchemes, GrayPalette, BluePalette,
     SUPPORTED_VIEWER_TYPES, MAX_STATES, MAX_SPATIAL_AXES
@@ -29,7 +29,7 @@ from .data_utils import (
 
 # Color utilities
 from .colors import getWidgetColors
-get_crosshair_colors = lambda: CROSSHAIR_COLORS
+# Legacy crosshair colors function removed - use getWidgetColors() instead
 
 # Legacy compatibility aliases
 AddLine = add_line
@@ -46,7 +46,7 @@ InitializeSpectrumplotItem = initialize_spectrum_plot_item
 
 __all__ = [
     # Constants
-    'CROSSHAIR_COLORS', 'AVG_COLORS', 'MIN_LINE_DISTANCE',
+    'MIN_LINE_DISTANCE',
     'DEFAULT_N_STOKES', 'DEFAULT_N_WL', 'DEFAULT_N_X', 'DEFAULT_WAVELENGTH_RANGE',
     'DEFAULT_LINE_WIDTH', 'ColorSchemes', 'GrayPalette', 'BluePalette',
     'SUPPORTED_VIEWER_TYPES', 'MAX_STATES', 'MAX_SPATIAL_AXES',
