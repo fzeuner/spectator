@@ -17,7 +17,7 @@ import os
 
 from .base_widgets import BaseControlWidget
 from models import ViewerSettings, PlotConfiguration
-from utils.plotting import CreateWlLimitLabel
+from utils.plotting import create_wavelength_limit_controls
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,11 +27,15 @@ class LinesControlGroup(QtWidgets.QWidget):
     """
     A widget for the line controls.
     """
+    # Signals
     toggleCrosshairSync = QtCore.pyqtSignal(bool)
     toggleAvgXSync = QtCore.pyqtSignal(bool)
-    toggleAvgXRemove = QtCore.pyqtSignal(bool)
     toggleAvgYSync = QtCore.pyqtSignal(bool)
+    spectralAveragingEnabled = QtCore.pyqtSignal(bool)  # New signal for spectral averaging control
+    toggleAvgXRemove = QtCore.pyqtSignal(bool)
     toggleAvgYRemove = QtCore.pyqtSignal(bool)
+    createDefaultSpectralAveraging = QtCore.pyqtSignal()  # Signal to create default spectral averaging
+    createDefaultSpatialAveraging = QtCore.pyqtSignal()   # Signal to create default spatial averaging
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
@@ -64,17 +68,41 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.avg_lines_box = QtWidgets.QGroupBox("<> lines")
         avg_lines_box_layout = QtWidgets.QVBoxLayout(self.avg_lines_box)
         
-        self.button_remove_x_avg = QtWidgets.QPushButton("remove <spectral>")
+        # Radio button group for spatial/spectral selection
+        self.avg_type_group = QtWidgets.QButtonGroup()
+        
+        # Spectral row: radio button + push button
+        spectral_row_layout = QtWidgets.QHBoxLayout()
+        self.radio_spectral = QtWidgets.QRadioButton()
+        self.avg_type_group.addButton(self.radio_spectral, 0)  # ID 0 for spectral
+        
+        self.button_remove_x_avg = QtWidgets.QPushButton("<spectral>")
         self.button_remove_x_avg.setCheckable(True)
         self.button_remove_x_avg.clicked.connect(self._on_toggle_avg_x_remove) # Connect to internal handler
         
-        avg_lines_box_layout.addWidget(self.button_remove_x_avg)
+        spectral_row_layout.addWidget(self.radio_spectral)
+        spectral_row_layout.addWidget(self.button_remove_x_avg)
+        avg_lines_box_layout.addLayout(spectral_row_layout)
         
-        self.button_remove_y_avg = QtWidgets.QPushButton("remove <spatial>")
+        # Spatial row: radio button + push button
+        spatial_row_layout = QtWidgets.QHBoxLayout()
+        self.radio_spatial = QtWidgets.QRadioButton()
+        self.radio_spatial.setChecked(True)  # Default to spatial averaging
+        self.avg_type_group.addButton(self.radio_spatial, 1)  # ID 1 for spatial
+        
+        self.button_remove_y_avg = QtWidgets.QPushButton("<spatial>")
         self.button_remove_y_avg.setCheckable(True)
         self.button_remove_y_avg.clicked.connect(self._on_toggle_avg_y_remove) # Connect to internal handler
         
-        avg_lines_box_layout.addWidget(self.button_remove_y_avg)
+        spatial_row_layout.addWidget(self.radio_spatial)
+        spatial_row_layout.addWidget(self.button_remove_y_avg)
+        avg_lines_box_layout.addLayout(spatial_row_layout)
+        
+        # Connect radio button group signal
+        self.avg_type_group.buttonClicked.connect(self._on_avg_type_changed)
+        
+        # Emit initial state (spatial is default)
+        self.spectralAveragingEnabled.emit(False)
         
         self.main_v_layout.addWidget(self.avg_lines_box)
 
@@ -99,13 +127,51 @@ class LinesControlGroup(QtWidgets.QWidget):
         
     @QtCore.pyqtSlot(bool)
     def _on_toggle_avg_x_remove(self, checked: bool):
-            self.toggleAvgYSync.emit(checked) # Emit the class-level signal
+            if checked:
+                # If manually activated, create default spectral averaging
+                if not self.button_remove_x_avg.property('auto_activated'):
+                    self.createDefaultSpectralAveraging.emit()
+            else:
+                # If deactivated, remove averaging
+                self.toggleAvgXRemove.emit(checked)
             self.button_remove_x_avg.setStyleSheet("background-color: red;" if checked else "")
+            # Clear the auto_activated flag
+            self.button_remove_x_avg.setProperty('auto_activated', False)
             
     @QtCore.pyqtSlot(bool)
     def _on_toggle_avg_y_remove(self, checked: bool):
-            self.toggleAvgYSync.emit(checked) # Emit the class-level signal
+            if checked:
+                # If manually activated, create default spatial averaging
+                if not self.button_remove_y_avg.property('auto_activated'):
+                    self.createDefaultSpatialAveraging.emit()
+            else:
+                # If deactivated, remove averaging
+                self.toggleAvgYRemove.emit(checked)
             self.button_remove_y_avg.setStyleSheet("background-color: red;" if checked else "")
+            # Clear the auto_activated flag
+            self.button_remove_y_avg.setProperty('auto_activated', False)
+    
+    def activate_spectral_button(self):
+        """Activate spectral averaging button when averaging is added."""
+        self.button_remove_x_avg.setProperty('auto_activated', True)  # Mark as auto-activated
+        self.button_remove_x_avg.setChecked(True)
+        self.button_remove_x_avg.setStyleSheet("background-color: red;")
+    
+    def activate_spatial_button(self):
+        """Activate spatial averaging button when averaging is added."""
+        self.button_remove_y_avg.setProperty('auto_activated', True)  # Mark as auto-activated
+        self.button_remove_y_avg.setChecked(True)
+        self.button_remove_y_avg.setStyleSheet("background-color: red;")
+    
+    def _on_avg_type_changed(self, button):
+        """Handle radio button selection change for averaging type."""
+        button_id = self.avg_type_group.id(button)
+        if button_id == 0:  # Spectral selected
+            print("Averaging type changed to: spectral")
+            self.spectralAveragingEnabled.emit(True)  # Enable spectral averaging
+        elif button_id == 1:  # Spatial selected
+            print("Averaging type changed to: spatial")
+            self.spectralAveragingEnabled.emit(False)  # Disable spectral averaging
 
     # Methods to update button states externally
     def set_crosshair_sync_state(self, checked: bool):
@@ -363,7 +429,7 @@ class PlotControlWidget(QtWidgets.QWidget):
         limits_wavelength_layout = QtWidgets.QVBoxLayout(wavelength_group_box)
 
         for limit_type in ['min', 'max']:
-            label, edit, layout = CreateWlLimitLabel(limit_type)
+            label, edit, layout = create_wavelength_limit_controls(limit_type)
             setattr(self, f'wavelength_{limit_type}_label', label)
             setattr(self, f'wavelength_{limit_type}_edit', edit)
             edit.editingFinished.connect(self._wavelength_range_changed)

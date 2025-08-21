@@ -378,7 +378,7 @@ def create_wavelength_limit_controls(name: str) -> Tuple[QtWidgets.QLabel, QtWid
     
     return label, line_edit, layout
 
-def CreateWlLimitLabel(name: str):
+def create_wavelength_limit_controls(name: str):
     """Label for wavelength limits"""
     wavelength_label = QtWidgets.QLabel(name)
     wavelength_edit = QtWidgets.QLineEdit()

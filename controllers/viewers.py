@@ -277,10 +277,32 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         image_spectra[i].crosshairMoved.connect(control_widget.handle_crosshair_movement)
         image_spectra[i].avgRegionChanged.connect(control_widget.handle_v_avg_line_movement)
         
+        # Connect spectral averaging control signal
+        control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra[i].set_spectral_averaging_enabled)
+        
+        # Connect averaging removal signals
+        control_widget.lines_content_widget.toggleAvgXRemove.connect(image_spectra[i].remove_spectral_averaging)
+        control_widget.lines_content_widget.toggleAvgYRemove.connect(image_spectra[i].remove_spatial_averaging)
+        
+        # Connect default averaging creation signals
+        control_widget.lines_content_widget.createDefaultSpectralAveraging.connect(image_spectra[i].create_default_spectral_averaging)
+        control_widget.lines_content_widget.createDefaultSpatialAveraging.connect(image_spectra[i].create_default_spatial_averaging)
+        
+        # Set control widget reference for button activation
+        image_spectra[i].control_widget = control_widget.lines_content_widget
+        
+        # Connect spatial averaging signal to spectrum window instead of spatial window
+        if i < len(spectra):
+            image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
+            # Connect spatial averaging removal to spectrum window
+            control_widget.lines_content_widget.toggleAvgYRemove.connect(spectra[i].clear_averaging_regions)
+        
         # Enhanced crosshair synchronization: connect spectrum image to spatial window
         if i < len(spatial):
             # Connect crosshair movement to update spatial window
             image_spectra[i].crosshairMoved.connect(spatial[i].update_from_spectrum_crosshair)
+            # Connect spectral averaging removal to spatial window
+            control_widget.lines_content_widget.toggleAvgXRemove.connect(spatial[i].clear_averaging_regions)
             # Note: Removed feedback connection from spatial horizontal line to spectrum image crosshair
             # to prevent unwanted feedback when moving the spatial window horizontal line
     

@@ -1,34 +1,6 @@
 #!/usr/bin/env python3
 """
 Data Viewer Example
-
-This example demonstrates how to use the new Model-View-Controller architecture
-for the spectral data viewer. 
-
-Created on Wed Nov  6 09:56:31 2024
-
-@author: franziskaz
-
-WARNING: if the qdarkstyle is used, there are some minor bugs in Dock and VerticalLabel:
-    create the following links (look at the files in this folder):
-        - mv ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py_bk
-        - ln -s ~/code/dkist/VerticalLabel.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/widgets/
-        - mv ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py_bk
-        - ln -s ~/code/dkist/Dock.py ~/miniconda3/envs/bayes/lib/python3.12/site-packages/pyqtgraph/dockarea/
-
-pyqtgraph = 0.13.7
-
-INPUT:
-    - numpy data cube: ordered arbitrarily, because the data manager handles the ordering
-
-- TODO: 
-    + add spatial x and spatial y profile
-    + averaging in x and/or y
-    + large data - maybe using fastplotlib?
-    + changing point sizes does not work: self.plot.getAxis('left').setStyle(tickFont = QFont().setPointSize(1))
-    + multiple crosshairs
-    + flexible data (only image spectra, non-stokes scans...)
-    
 """
 
 import sys
@@ -46,8 +18,8 @@ try:
     IMPORTS_AVAILABLE = True
 except ImportError as e:
     print(f"Error importing required modules: {e}")
-    print("Please ensure you're running in the 'dkist' conda environment:")
-    print("  conda activate dkist")
+    print("Please ensure you're running in the 'spectator' conda environment:")
+    print("  conda activate spectator")
     print("  python examples/spectator_example.py")
     IMPORTS_AVAILABLE = False
 

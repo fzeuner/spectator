@@ -11,9 +11,9 @@ from utils.constants import (
 )
 from utils.colors import getWidgetColors
 from utils import (
-    AddLine, AddCrosshair, CreateHistrogram, 
-    InitializeSpectrumplotItem, InitializeImageplotItem,
-    SetPlotXlamRange, ResetPlotXlamRange, update_crosshair_from_mouse
+    add_line, add_crosshair, create_histogram, 
+    initialize_spectrum_plot_item, initialize_image_plot_item,
+    set_plot_wavelength_range, reset_plot_wavelength_range, update_crosshair_from_mouse
 )
 
 class StokesSpatialWindow(BasePlotWidget):
@@ -43,12 +43,12 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
-        self.hLine = AddLine(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 0, moveable=True)
+        self.hLine = add_line(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 0, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
-        InitializeSpectrumplotItem(self.plotItem, y_label="x", x_label = "", x_units = "", y_units = "pixel")
+        initialize_spectrum_plot_item(self.plotItem, y_label="x", x_label = "", x_units = "", y_units = "pixel")
 
     def _setup_connections(self):
         """Connects signals to slots."""
@@ -76,7 +76,7 @@ class StokesSpatialWindow(BasePlotWidget):
         if hasattr(self, 'plot_data') and isinstance(self.plot_data, np.ndarray) and spatial_idx < len(self.plot_data):
             intensity_value = self.plot_data[spatial_idx]
         
-        self.label.setText(f"x={spatial_pos:.1f}, z={intensity_value:.5f}", size='6pt')
+        self.label.setText(f"x={spatial_pos:.0f}, z={intensity_value:.5f}", size='6pt')
         
     def _on_hline_moved(self):
         """Handles internal hLine movement and emits signal."""
@@ -203,12 +203,12 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_spectral_avg)
 
         colors = getWidgetColors()
-        self.vLine = AddLine(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 90, moveable=True)
+        self.vLine = add_line(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 90, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_h', 'dodgerblue'))      
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
-        InitializeSpectrumplotItem(self.plotItem)
+        initialize_spectrum_plot_item(self.plotItem)
 
     def _setup_connections(self):
         """Connects signals to slots."""
@@ -237,32 +237,36 @@ class StokesSpectrumWindow(BasePlotWidget):
         if isinstance(self.plot_data, np.ndarray) and self.plot_data.ndim == 1 and 0 <= spectral_idx < self.plot_data.size:
             intensity_value = self.plot_data[spectral_idx]
 
-        self.label.setText(f"λ: {spectral_value:.1f}, z: {intensity_value:.5f}", size='6pt')
+        self.label.setText(f"λ: {spectral_value:.0f}, z: {intensity_value:.5f}", size='6pt')
         
     def _update_label_x_avg(self):
-            """Updates the coordinate label for avaraged region."""
-            wl_value = self.current_x_idx_avg
-            # Find the closest index to the current spectral value
-            wl_idx = np.argmin(np.abs(self.spectral - wl_value)) if self.spectral.size > 0 else -1
-            intensity_value = np.nan
-            if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data.ndim == 1 and 0 <= wl_idx < self.plot_data_avg.size:
-                intensity_value = self.plot_data_avg[wl_idx]
+        """Updates the coordinate label for averaged region."""
+        # Use the white line position instead of fixed center position
+        wl_value = self.vLine.value() if hasattr(self, 'vLine') and self.vLine else self.current_x_idx_avg
+        # Find the closest index to the current spectral value
+        wl_idx = np.argmin(np.abs(self.spectral - wl_value)) if self.spectral.size > 0 else -1
+        intensity_value = np.nan
+        if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data_avg.ndim == 1 and 0 <= wl_idx < self.plot_data_avg.size:
+            intensity_value = self.plot_data_avg[wl_idx]
 
-            self.label_avg.setText(f"λ: {wl_value:.1f}, z: {intensity_value:.5f}", size='6pt')
+        self.label_avg.setText(f"λ: {wl_value:.0f}, z: {intensity_value:.5f}", size='6pt')
 
     def _on_vline_moved(self):
         """Handles internal vLine movement and emits signal."""
         current_wl = self.vLine.value()
         self.spectralChanged.emit(current_wl)
         self._update_label()
+        # Also update spatial averaging label if it exists
+        if hasattr(self, 'plot_data_avg') and hasattr(self, 'current_x_idx_avg'):
+            self._update_label_x_avg()
 
     def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
         """Updates the spectral-axis range of the spectrum plot."""
-        SetPlotXlamRange(self.plotItem, self.spectral, min_val, max_val, axis='x')
+        set_plot_wavelength_range(self.plotItem, self.spectral, min_val, max_val, axis='x')
     
     def reset_spectral_range(self):
         """Resets the spectral-axis range to the initial maximum range."""
-        ResetPlotXlamRange(self.plotItem, self.spectral, axis='x')
+        reset_plot_wavelength_range(self.plotItem, self.spectral, axis='x')
 
     def _emit_y_range_changed(self, axis, limits):
         """Emits the current Y-axis range."""
@@ -291,12 +295,22 @@ class StokesSpectrumWindow(BasePlotWidget):
         self._update_label() # Update label after data change    
 
     def update_spectrum_data_x_avg(self, x_idx_l: int, x_idx_c: int , x_idx_h: int):
-            """Updates the plotted spectrum data based on a new spatial indices of averaging regions."""
-
-            self.current_x_idx_avg = x_idx_c
-            self.plot_data_avg = (self.full_data[x_idx_l:x_idx_h,:]).mean(axis=0)
-            self.plot_curve_wl_avg.setData(self.x, self.plot_data_avg)
-            self._update_label_x_avg()
+        """Updates the plotted spectrum data based on a new spatial indices of averaging regions."""
+        self.current_x_idx_avg = x_idx_c
+        self.plot_data_avg = (self.full_data[:, x_idx_l:x_idx_h+1]).mean(axis=1)
+        self.plot_curve_spectral_avg.setData(self.spectral, self.plot_data_avg)
+        self._update_label_x_avg()
+    
+    @QtCore.pyqtSlot(float, float, float, int)
+    def handle_spatial_avg_line_movement(self, y_low: float, y_center: float, y_high: float, source_stokes_index: int):
+        """Handle spatial averaging line movement from spectrum image window."""
+        # Convert y positions to spatial indices
+        y_idx_low = int(np.clip(np.round(y_low), 0, self.full_data.shape[1] - 1))
+        y_idx_center = int(np.clip(np.round(y_center), 0, self.full_data.shape[1] - 1))
+        y_idx_high = int(np.clip(np.round(y_high), 0, self.full_data.shape[1] - 1))
+        
+        # Update spectrum data with spatial averaging
+        self.update_spectrum_data_x_avg(y_idx_low, y_idx_center, y_idx_high)
     
     def clear_averaging_regions(self):
         """Clear all spectrum averaging regions and reset to clean state."""
@@ -315,6 +329,7 @@ class StokesSpectrumWindow(BasePlotWidget):
 class StokesSpectrumImageWindow(BasePlotWidget):
     crosshairMoved = QtCore.pyqtSignal(float, float, int)
     avgRegionChanged = QtCore.pyqtSignal(float, float, float, int)
+    spatialAvgRegionChanged = QtCore.pyqtSignal(float, float, float, int)
 
     def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
         super().__init__(None)
@@ -335,7 +350,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     def _setup_image_plot(self):
         self.image_item = pg.ImageItem()
         self.plotItem.addItem(self.image_item)
-        self.histogram = CreateHistrogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
+        self.histogram = create_histogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
 
         self.image_item.setImage(self.data.T) # <--- Transpose the data here for plotting spectral along x axis!
 
@@ -345,8 +360,6 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         y_max_x = self.spatial_pixels[-1] if self.spatial_pixels.size > 0 else self.n_x_pixel
 
         self.image_item.setRect(x_min_spectral, y_min_x, x_max_spectral - x_min_spectral, y_max_x - y_min_x)
-        
-        # Lambda label removed per user request
 
         self.plotItem.setMenuEnabled(False)
         self.plotItem.vb.mouseButtons = {
@@ -360,15 +373,29 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.right_button_pressed = False
         self.drag_start_pos = None
         self.is_dragging = False
+        self.spectral_averaging_enabled = False  # Default to disabled
+        self.spatial_averaging_enabled = True  # Default to enabled
 
+        # Spectral averaging lines (vertical)
         self.line1 = None
         self.line2 = None
         self.center_line = None
+
+        # Spatial averaging lines (horizontal)
+        self.h_line1 = None
+        self.h_line2 = None
+        self.h_center_line = None
 
         self.temp_line_press = None
         self.temp_line_drag = None
 
     def _remove_final_lines(self):
+        # Remove both spectral and spatial averaging lines
+        self._remove_spectral_lines()
+        self._remove_spatial_lines()
+    
+    def _remove_spectral_lines(self):
+        # Remove only spectral averaging lines (vertical)
         for line in [self.line1, self.line2, self.center_line]:
             if line:
                 try:
@@ -377,6 +404,17 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                     pass
                 self.plotItem.removeItem(line)
         self.line1, self.line2, self.center_line = None, None, None
+    
+    def _remove_spatial_lines(self):
+        # Remove only spatial averaging lines (horizontal)
+        for line in [self.h_line1, self.h_line2, self.h_center_line]:
+            if line:
+                try:
+                    line.sigPositionChanged.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
+                self.plotItem.removeItem(line)
+        self.h_line1, self.h_line2, self.h_center_line = None, None, None
 
     def _remove_temp_lines(self):
         if self.temp_line_press:
@@ -393,80 +431,154 @@ class StokesSpectrumImageWindow(BasePlotWidget):
 
         self._remove_temp_lines()
         colors = getWidgetColors()
-        self.temp_line_press = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=self.drag_start_pos.x(), style=QtCore.Qt.DashLine)
+        if self.spectral_averaging_enabled:
+            # Vertical line for spectral averaging
+            self.temp_line_press = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=self.drag_start_pos.x(), style=QtCore.Qt.DashLine)
+        else:
+            # Horizontal line for spatial averaging
+            self.temp_line_press = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=self.drag_start_pos.y(), style=QtCore.Qt.DashLine)
 
     def _handleMouseRelease(self, event):
         self.right_button_pressed = False
 
         if self.is_dragging and self.drag_start_pos:
-            self._remove_final_lines()
-
-            wl_start = self.drag_start_pos.x()
-            wl_end = self.plotItem.vb.mapSceneToView(event.scenePos()).x()
-
-            wl1_initial, wl2_initial = min(wl_start, wl_end), max(wl_start, wl_end)
-
-            # Ensure initial distance is at least MIN_LINE_DISTANCE
-            if (wl2_initial - wl1_initial) < MIN_LINE_DISTANCE:
-                center_initial = (wl1_initial + wl2_initial) / 2
-                wl1_initial = center_initial - MIN_LINE_DISTANCE / 2
-                wl2_initial = center_initial + MIN_LINE_DISTANCE / 2
-
-            clamped_wl1 = self._clamp_line_position(wl1_initial)
-            clamped_wl2 = self._clamp_line_position(wl2_initial)
-
-            if (clamped_wl2 - clamped_wl1) < MIN_LINE_DISTANCE:
-                if clamped_wl1 == 0: 
-                    clamped_wl2 = self._clamp_line_position(clamped_wl1 + MIN_LINE_DISTANCE)
-                elif clamped_wl2 == self.n_spectral - 1: 
-                    clamped_wl1 = self._clamp_line_position(clamped_wl2 - MIN_LINE_DISTANCE)
-                else: 
-                    center_temp = (clamped_wl1 + clamped_wl2) / 2
-                    clamped_wl1 = self._clamp_line_position(center_temp - MIN_LINE_DISTANCE / 2)
-                    clamped_wl2 = self._clamp_line_position(center_temp + MIN_LINE_DISTANCE / 2)
-
-            center_wl = (clamped_wl1 + clamped_wl2) / 2 # Recalculate center based on final positions
-
-            colors = getWidgetColors()
-            self.line1 = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=clamped_wl1, moveable=True, style=QtCore.Qt.SolidLine)
-            self.line2 = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=clamped_wl2, moveable=True, style=QtCore.Qt.SolidLine)
-            self.center_line = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=center_wl, moveable=True, style=QtCore.Qt.DotLine)
-
-            self.line1.sigPositionChanged.connect(self._update_from_line1)
-            self.line2.sigPositionChanged.connect(self._update_from_line2)
-            self.center_line.sigPositionChanged.connect(self._update_from_center)
-
-            self._update_lines_and_emit(source_line=self.line1)
+            if self.spectral_averaging_enabled:
+                self._handle_spectral_averaging_release(event)
+            else:
+                self._handle_spatial_averaging_release(event)
 
         self._remove_temp_lines()
         self.drag_start_pos = None
         self.is_dragging = False
+    
+    def _handle_spectral_averaging_release(self, event):
+        """Handle mouse release for spectral averaging (vertical lines)."""
+        # Only remove existing spectral averaging lines, keep spatial ones
+        self._remove_spectral_lines()
+
+        wl_start = self.drag_start_pos.x()
+        wl_end = self.plotItem.vb.mapSceneToView(event.scenePos()).x()
+
+        wl1_initial, wl2_initial = min(wl_start, wl_end), max(wl_start, wl_end)
+
+        # Ensure initial distance is at least MIN_LINE_DISTANCE
+        if (wl2_initial - wl1_initial) < MIN_LINE_DISTANCE:
+            center_initial = (wl1_initial + wl2_initial) / 2
+            wl1_initial = center_initial - MIN_LINE_DISTANCE / 2
+            wl2_initial = center_initial + MIN_LINE_DISTANCE / 2
+
+        clamped_wl1 = self._clamp_spectral_position(wl1_initial)
+        clamped_wl2 = self._clamp_spectral_position(wl2_initial)
+
+        if (clamped_wl2 - clamped_wl1) < MIN_LINE_DISTANCE:
+            if clamped_wl1 == 0: 
+                clamped_wl2 = self._clamp_spectral_position(clamped_wl1 + MIN_LINE_DISTANCE)
+            elif clamped_wl2 == self.n_spectral - 1: 
+                clamped_wl1 = self._clamp_spectral_position(clamped_wl2 - MIN_LINE_DISTANCE)
+            else: 
+                center_temp = (clamped_wl1 + clamped_wl2) / 2
+                clamped_wl1 = self._clamp_spectral_position(center_temp - MIN_LINE_DISTANCE / 2)
+                clamped_wl2 = self._clamp_spectral_position(center_temp + MIN_LINE_DISTANCE / 2)
+
+        center_wl = (clamped_wl1 + clamped_wl2) / 2
+
+        colors = getWidgetColors()
+        self.line1 = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=clamped_wl1, moveable=True, style=QtCore.Qt.SolidLine)
+        self.line2 = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=clamped_wl2, moveable=True, style=QtCore.Qt.SolidLine)
+        self.center_line = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=center_wl, moveable=True, style=QtCore.Qt.DotLine)
+
+        self.line1.sigPositionChanged.connect(self._update_from_line1)
+        self.line2.sigPositionChanged.connect(self._update_from_line2)
+        self.center_line.sigPositionChanged.connect(self._update_from_center)
+
+        self._update_lines_and_emit(source_line=self.line1)
+    
+    def _handle_spatial_averaging_release(self, event):
+        """Handle mouse release for spatial averaging (horizontal lines)."""
+        # Only remove existing spatial averaging lines, keep spectral ones
+        self._remove_spatial_lines()
+
+        y_start = self.drag_start_pos.y()
+        y_end = self.plotItem.vb.mapSceneToView(event.scenePos()).y()
+
+        y1_initial, y2_initial = min(y_start, y_end), max(y_start, y_end)
+
+        # Ensure initial distance is at least MIN_LINE_DISTANCE
+        if (y2_initial - y1_initial) < MIN_LINE_DISTANCE:
+            center_initial = (y1_initial + y2_initial) / 2
+            y1_initial = center_initial - MIN_LINE_DISTANCE / 2
+            y2_initial = center_initial + MIN_LINE_DISTANCE / 2
+
+        clamped_y1 = self._clamp_spatial_position(y1_initial)
+        clamped_y2 = self._clamp_spatial_position(y2_initial)
+
+        if (clamped_y2 - clamped_y1) < MIN_LINE_DISTANCE:
+            if clamped_y1 == 0: 
+                clamped_y2 = self._clamp_spatial_position(clamped_y1 + MIN_LINE_DISTANCE)
+            elif clamped_y2 == self.n_x_pixel - 1: 
+                clamped_y1 = self._clamp_spatial_position(clamped_y2 - MIN_LINE_DISTANCE)
+            else: 
+                center_temp = (clamped_y1 + clamped_y2) / 2
+                clamped_y1 = self._clamp_spatial_position(center_temp - MIN_LINE_DISTANCE / 2)
+                clamped_y2 = self._clamp_spatial_position(center_temp + MIN_LINE_DISTANCE / 2)
+
+        center_y = (clamped_y1 + clamped_y2) / 2
+
+        colors = getWidgetColors()
+        self.h_line1 = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=clamped_y1, moveable=True, style=QtCore.Qt.SolidLine)
+        self.h_line2 = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=clamped_y2, moveable=True, style=QtCore.Qt.SolidLine)
+        self.h_center_line = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=center_y, moveable=True, style=QtCore.Qt.DotLine)
+
+        self.h_line1.sigPositionChanged.connect(self._update_from_h_line1)
+        self.h_line2.sigPositionChanged.connect(self._update_from_h_line2)
+        self.h_center_line.sigPositionChanged.connect(self._update_from_h_center)
+
+        self._update_spatial_lines_and_emit(source_line=self.h_line1)
 
     def eventFilter(self, obj, event):
         if obj == self.plotItem.vb:
+            # Handle right-click events based on averaging state
             if event.type() == QtCore.QEvent.GraphicsSceneMousePress and event.button() == QtCore.Qt.RightButton:
-                self._handleMousePress(event)
-                return True
+                if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
+                    self._handleMousePress(event)
+                    return True
+                else:
+                    # Block right-click completely when no averaging is enabled
+                    return True
             elif event.type() == QtCore.QEvent.GraphicsSceneMouseMove and self.right_button_pressed:
-                scene_pos = event.scenePos()
-                press_pos = event.buttonDownScenePos(QtCore.Qt.RightButton)
-                if (scene_pos - press_pos).manhattanLength() > 2:
+                if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
+                    # Keep first line at start position, move second line with mouse
+                    if self.temp_line_drag:
+                        self.plotItem.removeItem(self.temp_line_drag)
+                        self.temp_line_drag = None
+                    
+                    colors = getWidgetColors()
+                    current_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
+                    if self.spectral_averaging_enabled:
+                        # Second vertical line follows mouse for spectral averaging
+                        self.temp_line_drag = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=current_pos.x(), style=QtCore.Qt.DashLine)
+                    else:
+                        # Second horizontal line follows mouse for spatial averaging
+                        self.temp_line_drag = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=current_pos.y(), style=QtCore.Qt.DashLine)
                     self.is_dragging = True
-                if self.is_dragging:
-                    if self.temp_line_drag is None:
-                        colors = getWidgetColors()
-                        self.temp_line_drag = AddLine(self.plotItem, colors.get('averaging_v', 'yellow'), 90, style=QtCore.Qt.DashLine) # Use AddLine here too
-                    current_wl = self.plotItem.vb.mapSceneToView(scene_pos).x()
-                    self.temp_line_drag.setPos(current_wl)
-                self.updateCrosshairAndLabel(scene_pos)
-                return True
+                    return True
+                else:
+                    # Block right-click drag when no averaging is enabled
+                    return True
             elif event.type() == QtCore.QEvent.GraphicsSceneMouseRelease and event.button() == QtCore.Qt.RightButton:
-                self._handleMouseRelease(event)
-                return True
+                if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
+                    self._handleMouseRelease(event)
+                    return True
+                else:
+                    # Block right-click release when no averaging is enabled
+                    return True
         return super().eventFilter(obj, event)
 
-    def _clamp_line_position(self, pos: float) -> float:
+    def _clamp_spectral_position(self, pos: float) -> float:
         return np.clip(pos, 0, self.n_spectral - 1)
+    
+    def _clamp_spatial_position(self, pos: float) -> float:
+        return np.clip(pos, 0, self.n_x_pixel - 1)
 
     def _update_lines_and_emit(self, source_line=None):
         if not all([self.line1, self.line2, self.center_line]):
@@ -486,30 +598,30 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             new_center = current_center
 
             if source_line is self.line1:
-                new_l1 = self._clamp_line_position(current_l1)
+                new_l1 = self._clamp_spectral_position(current_l1)
                 new_l2_candidate = new_l1 + (current_l2 - current_l1)
-                new_l2 = self._clamp_line_position(max(new_l2_candidate, new_l1 + MIN_LINE_DISTANCE))
+                new_l2 = self._clamp_spectral_position(max(new_l2_candidate, new_l1 + MIN_LINE_DISTANCE))
                 new_center = (new_l1 + new_l2) / 2
             elif source_line is self.line2:
-                new_l2 = self._clamp_line_position(current_l2)
+                new_l2 = self._clamp_spectral_position(current_l2)
                 new_l1_candidate = new_l2 - (current_l2 - current_l1)
-                new_l1 = self._clamp_line_position(min(new_l1_candidate, new_l2 - MIN_LINE_DISTANCE))
+                new_l1 = self._clamp_spectral_position(min(new_l1_candidate, new_l2 - MIN_LINE_DISTANCE))
                 new_center = (new_l1 + new_l2) / 2
             elif source_line is self.center_line:
-                new_center = self._clamp_line_position(current_center)
+                new_center = self._clamp_spectral_position(current_center)
                 spacing = (current_l2 - current_l1) / 2
 
                 if spacing < MIN_LINE_DISTANCE / 2:
                     spacing = MIN_LINE_DISTANCE / 2
 
-                new_l1 = self._clamp_line_position(new_center - spacing)
-                new_l2 = self._clamp_line_position(new_center + spacing)
+                new_l1 = self._clamp_spectral_position(new_center - spacing)
+                new_l2 = self._clamp_spectral_position(new_center + spacing)
 
                 if new_l1 == 0 and (new_l2 - new_l1) < MIN_LINE_DISTANCE:
-                    new_l2 = self._clamp_line_position(new_l1 + MIN_LINE_DISTANCE)
+                    new_l2 = self._clamp_spectral_position(new_l1 + MIN_LINE_DISTANCE)
                     new_center = (new_l1 + new_l2) / 2
                 elif new_l2 == self.n_spectral - 1 and (new_l2 - new_l1) < MIN_LINE_DISTANCE: 
-                    new_l1 = self._clamp_line_position(new_l2 - MIN_LINE_DISTANCE)
+                    new_l1 = self._clamp_spectral_position(new_l2 - MIN_LINE_DISTANCE)
                     new_center = (new_l1 + new_l2) / 2
 
             if new_l1 > new_l2:
@@ -520,13 +632,13 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                     new_l2 = new_l1 + MIN_LINE_DISTANCE
             elif (new_l2 - new_l1) < MIN_LINE_DISTANCE:
                 if source_line is self.line1:
-                    new_l2 = self._clamp_line_position(new_l1 + MIN_LINE_DISTANCE)
+                    new_l2 = self._clamp_spectral_position(new_l1 + MIN_LINE_DISTANCE)
                 elif source_line is self.line2:
-                    new_l1 = self._clamp_line_position(new_l2 - MIN_LINE_DISTANCE)
+                    new_l1 = self._clamp_spectral_position(new_l2 - MIN_LINE_DISTANCE)
                 else:
                     center_temp = (new_l1 + new_l2) / 2
-                    new_l1 = self._clamp_line_position(center_temp - MIN_LINE_DISTANCE / 2)
-                    new_l2 = self._clamp_line_position(center_temp + MIN_LINE_DISTANCE / 2)
+                    new_l1 = self._clamp_spectral_position(center_temp - MIN_LINE_DISTANCE / 2)
+                    new_l2 = self._clamp_spectral_position(center_temp + MIN_LINE_DISTANCE / 2)
 
             if new_l1 > new_l2:
                  new_l1, new_l2 = new_l2, new_l1
@@ -539,15 +651,118 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             self.line1.setValue(new_l1)
             self.line2.setValue(new_l2)
             self.center_line.setValue((new_l1 + new_l2) / 2)
-        
-            # Lambda label update removed per user request
 
             self.avgRegionChanged.emit(new_l1, (new_l1 + new_l2) / 2, new_l2, self.stokes_index)
+            
+            # Update the yellow spectral averaging label
+            self._update_spectral_averaging_label(new_l1, (new_l1 + new_l2) / 2, new_l2)
+            
+            # Activate spectral button when averaging is created
+            if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'activate_spectral_button'):
+                self.control_widget.activate_spectral_button()
 
         finally:
             self.line1.blockSignals(False)
             self.line2.blockSignals(False)
             self.center_line.blockSignals(False)
+
+    def _update_spatial_lines_and_emit(self, source_line=None):
+        if not all([self.h_line1, self.h_line2, self.h_center_line]):
+            return
+
+        self.h_line1.blockSignals(True)
+        self.h_line2.blockSignals(True)
+        self.h_center_line.blockSignals(True)
+
+        try:
+            current_y1 = self.h_line1.value()
+            current_y2 = self.h_line2.value()
+            current_center = self.h_center_line.value()
+
+            new_y1 = current_y1
+            new_y2 = current_y2
+            new_center = current_center
+
+            if source_line is self.h_line1:
+                new_y1 = self._clamp_spatial_position(current_y1)
+                new_y2_candidate = new_y1 + (current_y2 - current_y1)
+                new_y2 = self._clamp_spatial_position(max(new_y2_candidate, new_y1 + MIN_LINE_DISTANCE))
+                new_center = (new_y1 + new_y2) / 2
+            elif source_line is self.h_line2:
+                new_y2 = self._clamp_spatial_position(current_y2)
+                new_y1_candidate = new_y2 - (current_y2 - current_y1)
+                new_y1 = self._clamp_spatial_position(min(new_y1_candidate, new_y2 - MIN_LINE_DISTANCE))
+                new_center = (new_y1 + new_y2) / 2
+            elif source_line == self.h_center_line:
+                current_y1 = self.h_line1.value()
+                current_y2 = self.h_line2.value()
+                current_center = self.h_center_line.value()
+                
+                new_center = self._clamp_spatial_position(current_center)
+                spacing = (current_y2 - current_y1) / 2
+
+                if spacing < MIN_LINE_DISTANCE / 2:
+                    spacing = MIN_LINE_DISTANCE / 2
+
+                new_y1 = self._clamp_spatial_position(new_center - spacing)
+                new_y2 = self._clamp_spatial_position(new_center + spacing)
+
+                if new_y1 == 0 and (new_y2 - new_y1) < MIN_LINE_DISTANCE:
+                    new_y2 = self._clamp_spatial_position(new_y1 + MIN_LINE_DISTANCE)
+                    new_center = (new_y1 + new_y2) / 2
+                elif new_y2 == self.n_x_pixel - 1 and (new_y2 - new_y1) < MIN_LINE_DISTANCE: 
+                    new_y1 = self._clamp_spatial_position(new_y2 - MIN_LINE_DISTANCE)
+                    new_center = (new_y1 + new_y2) / 2
+                
+                self.h_line1.setValue(new_y1)
+                self.h_line2.setValue(new_y2)
+
+            if new_y1 > new_y2:
+                temp = new_y1
+                new_y1 = new_y2
+                new_y2 = temp
+                if (new_y2 - new_y1) < MIN_LINE_DISTANCE:
+                    new_y2 = new_y1 + MIN_LINE_DISTANCE
+            elif (new_y2 - new_y1) < MIN_LINE_DISTANCE:
+                if source_line is self.h_line1:
+                    new_y2 = self._clamp_spatial_position(new_y1 + MIN_LINE_DISTANCE)
+                elif source_line is self.h_line2:
+                    new_y1 = self._clamp_spatial_position(new_y2 - MIN_LINE_DISTANCE)
+                else:
+                    center_temp = (new_y1 + new_y2) / 2
+                    new_y1 = self._clamp_spatial_position(center_temp - MIN_LINE_DISTANCE / 2)
+                    new_y2 = self._clamp_spatial_position(center_temp + MIN_LINE_DISTANCE / 2)
+
+            if new_y1 > new_y2:
+                 new_y1, new_y2 = new_y2, new_y1
+            if (new_y2 - new_y1) < MIN_LINE_DISTANCE:
+                 new_y2 = new_y1 + MIN_LINE_DISTANCE
+                 if new_y2 > self.n_x_pixel - 1: 
+                     new_y2 = self.n_x_pixel - 1 
+                     new_y1 = max(0, new_y2 - MIN_LINE_DISTANCE)
+
+            self.h_line1.setValue(new_y1)
+            self.h_line2.setValue(new_y2)
+            self.h_center_line.setValue((new_y1 + new_y2) / 2)
+            
+            # Get final positions
+            new_y1 = self.h_line1.value()
+            new_y2 = self.h_line2.value()
+            
+            # Emit spatial averaging signal (connect to spectrum window)
+            self.spatialAvgRegionChanged.emit(new_y1, (new_y1 + new_y2) / 2, new_y2, self.stokes_index)
+            
+            # Update the blue spatial averaging label
+            self._update_spatial_averaging_label(new_y1, (new_y1 + new_y2) / 2, new_y2)
+            
+            # Activate spatial button when averaging is created
+            if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'activate_spatial_button'):
+                self.control_widget.activate_spatial_button()
+
+        finally:
+            self.h_line1.blockSignals(False)
+            self.h_line2.blockSignals(False)
+            self.h_center_line.blockSignals(False)
 
     def _update_from_line1(self, line):
         self._update_lines_and_emit(source_line=line)
@@ -557,26 +772,44 @@ class StokesSpectrumImageWindow(BasePlotWidget):
 
     def _update_from_center(self, line):
         self._update_lines_and_emit(source_line=line)
+    
+    def _update_from_h_line1(self, line):
+        self._update_spatial_lines_and_emit(source_line=line)
+
+    def _update_from_h_line2(self, line):
+        self._update_spatial_lines_and_emit(source_line=line)
+
+    def _update_from_h_center(self, line):
+        self._update_spatial_lines_and_emit(source_line=line)
 
     def _setup_axes(self):
-        InitializeImageplotItem(self.plotItem, y_values=True,
+        initialize_image_plot_item(self.plotItem, y_values=True,
                                 y_label="x", y_units="pixel", 
                                 x_label="λ", x_units="pixel") 
 
         num_wl_ticks = 8
         wl_ticks_pix = np.linspace(0, self.n_spectral - 1, num_wl_ticks)
-        wl_ticks = [(tick, f'{tick:.1f}') for tick in wl_ticks_pix]
+        wl_ticks = [(tick, f'{tick:.0f}') for tick in wl_ticks_pix]
         self.plotItem.getAxis('bottom').setTicks([wl_ticks]) # Apply to bottom axis
 
     def _setup_crosshair(self):
 
         colors = getWidgetColors()
-        self.vLine, self.hLine = AddCrosshair(self.plotItem, colors.get('crosshair_v', 'white'), colors.get('crosshair_h_spectrum_image', 'white'))
+        self.vLine, self.hLine = add_crosshair(self.plotItem, colors.get('crosshair_v', 'white'), colors.get('crosshair_h_spectrum_image', 'white'))
         self.plotItem.scene().sigMouseMoved.connect(self.updateCrosshairAndLabel)
         self.plotItem.scene().sigMouseClicked.connect(self.mouseClicked)
         self.last_valid_crosshair_pos = None
         self.crosshair_locked = False
-        self.updateLabelFromCrosshair(0, 0) 
+        self.updateLabelFromCrosshair(0, 0)
+        
+        # Add yellow spectral averaging label using same positioning as spectrum windows
+        colors = getWidgetColors()
+        self.label_avg_spectral = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_v', 'yellow'))
+        self.graphics_widget.addItem(self.label_avg_spectral, row=1, col=1)
+        
+        # Add blue spatial averaging label using same positioning as spectrum windows  
+        self.label_avg_spatial = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_h', 'dodgerblue'))
+        self.graphics_widget.addItem(self.label_avg_spatial, row=1, col=2)
 
     def mouseClicked(self, event):
         if event.double():
@@ -604,13 +837,13 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         index_x = np.clip(int(np.round(ypos_spatial_x)), 0, self.n_x_pixel - 1)
 
         intensity = self.data[index_spectral, index_x] 
-        self.label.setText(f"λ: {xpos_wl:.1f}, x: {ypos_spatial_x:.2f}, z: {intensity:.5f}", size='6pt') 
+        self.label.setText(f"λ: {xpos_wl:.0f}, x: {ypos_spatial_x:.0f}, z: {intensity:.5f}", size='6pt') 
 
     def update_spectral_range(self, min_val, max_val):
-        SetPlotXlamRange(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x') 
+        set_plot_wavelength_range(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x') 
 
     def reset_spectral_range(self):
-        ResetPlotXlamRange(self.plotItem, self.spectral_pixels, axis='x') 
+        reset_plot_wavelength_range(self.plotItem, self.spectral_pixels, axis='x') 
 
     def updateExternalVLine(self, xpos_wl: float): 
         if not self.crosshair_locked:
@@ -661,5 +894,97 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     
     def clear_averaging_regions(self):
         """Clear all averaging regions and reset to clean state."""
-        # Lambda label functionality removed per user request
-        pass
+        self._remove_final_lines()
+        # Clear the averaging labels
+        if hasattr(self, 'label_avg_spectral'):
+            self.label_avg_spectral.setText("")
+        if hasattr(self, 'label_avg_spatial'):
+            self.label_avg_spatial.setText("")
+    
+    def _update_spectral_averaging_label(self, lambda_left: float, lambda_center: float, lambda_right: float):
+        """Update the yellow spectral averaging label with lambda values."""
+        if hasattr(self, 'label_avg_spectral'):
+            self.label_avg_spectral.setText(
+                f"λ left: {lambda_left:.0f}, λ center: {lambda_center:.0f}, λ right: {lambda_right:.0f}", 
+                size='6pt'
+            )
+    
+    def _update_spatial_averaging_label(self, x_left: float, x_center: float, x_right: float):
+        """Update the blue spatial averaging label with x values."""
+        if hasattr(self, 'label_avg_spatial'):
+            self.label_avg_spatial.setText(
+                f"x lower: {x_left:.0f}, x center: {x_center:.0f}, x upper: {x_right:.0f}", 
+                size='6pt'
+            )
+    
+    def remove_spectral_averaging(self):
+        """Remove all spectral averaging lines and clear labels."""
+        self._remove_spectral_lines()
+        if hasattr(self, 'label_avg_spectral'):
+            self.label_avg_spectral.setText("")
+    
+    def remove_spatial_averaging(self):
+        """Remove all spatial averaging lines and clear labels."""
+        self._remove_spatial_lines()
+        if hasattr(self, 'label_avg_spatial'):
+            self.label_avg_spatial.setText("")
+    
+    def create_default_spectral_averaging(self):
+        """Create default spectral averaging lines in the center of the image."""
+        # Calculate center position and default width (10 pixels)
+        center_wl = self.n_spectral // 2
+        half_width = 5  # 5 pixels on each side = 10 pixel total width
+        
+        wl_left = max(0, center_wl - half_width)
+        wl_right = min(self.n_spectral - 1, center_wl + half_width)
+        
+        # Remove existing spectral lines first
+        self._remove_spectral_lines()
+        
+        # Create new spectral averaging lines
+        colors = getWidgetColors()
+        self.line1 = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=wl_left, moveable=True, style=QtCore.Qt.SolidLine)
+        self.line2 = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=wl_right, moveable=True, style=QtCore.Qt.SolidLine)
+        self.center_line = add_line(self.plotItem, colors.get('averaging_v', 'yellow'), 90, pos=center_wl, moveable=True, style=QtCore.Qt.DotLine)
+        
+        # Connect signals
+        self.line1.sigPositionChanged.connect(self._update_from_line1)
+        self.line2.sigPositionChanged.connect(self._update_from_line2)
+        self.center_line.sigPositionChanged.connect(self._update_from_center)
+        
+        # Update and emit
+        self._update_lines_and_emit(source_line=self.line1)
+    
+    def create_default_spatial_averaging(self):
+        """Create default spatial averaging lines in the center of the image."""
+        # Calculate center position and default width (10 pixels)
+        center_x = self.n_x_pixel // 2
+        half_width = 5  # 5 pixels on each side = 10 pixel total width
+        
+        x_lower = max(0, center_x - half_width)
+        x_upper = min(self.n_x_pixel - 1, center_x + half_width)
+        
+        # Remove existing spatial lines first
+        self._remove_spatial_lines()
+        
+        # Create new spatial averaging lines
+        colors = getWidgetColors()
+        self.h_line1 = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=x_lower, moveable=True, style=QtCore.Qt.SolidLine)
+        self.h_line2 = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=x_upper, moveable=True, style=QtCore.Qt.SolidLine)
+        self.h_center_line = add_line(self.plotItem, colors.get('averaging_h', 'dodgerblue'), 0, pos=center_x, moveable=True, style=QtCore.Qt.DotLine)
+        
+        # Connect signals
+        self.h_line1.sigPositionChanged.connect(self._update_from_h_line1)
+        self.h_line2.sigPositionChanged.connect(self._update_from_h_line2)
+        self.h_center_line.sigPositionChanged.connect(self._update_from_h_center)
+        
+        # Update and emit
+        self._update_spatial_lines_and_emit(source_line=self.h_line1)
+    
+    @QtCore.pyqtSlot(bool)
+    def set_spectral_averaging_enabled(self, enabled: bool):
+        """Enable or disable spectral averaging functionality."""
+        self.spectral_averaging_enabled = enabled
+        self.spatial_averaging_enabled = not enabled  # Toggle between the two
+        # Note: Don't clear existing averaging regions when disabled
+        # The lines should remain visible, only creation of new ones is disabled

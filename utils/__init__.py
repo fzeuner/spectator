@@ -29,20 +29,6 @@ from .data_utils import (
 
 # Color utilities
 from .colors import getWidgetColors
-# Legacy crosshair colors function removed - use getWidgetColors() instead
-
-# Legacy compatibility aliases
-AddLine = add_line
-AddCrosshair = add_crosshair
-CreateHistrogram = create_histogram
-CreateWlLimitLabel = create_wavelength_limit_controls
-CreateYLimitLabel = create_y_limit_controls
-SetPlotXlamRange = set_plot_wavelength_range
-ResetPlotXlamRange = reset_plot_wavelength_range
-update_crosshair_from_mouse = update_crosshair_from_mouse
-ExampleData = generate_example_data
-InitializeImageplotItem = initialize_image_plot_item
-InitializeSpectrumplotItem = initialize_spectrum_plot_item
 
 __all__ = [
     # Constants
@@ -66,8 +52,4 @@ __all__ = [
     # Color utilities
     'getWidgetColors', 'get_crosshair_colors',
     
-    # Legacy compatibility
-    'AddLine', 'AddCrosshair', 'CreateHistrogram', 'CreateWlLimitLabel',
-    'CreateYLimitLabel', 'SetPlotXlamRange', 'ResetPlotXlamRange',
-    'ExampleData', 'InitializeImageplotItem', 'InitializeSpectrumplotItem'
 ]

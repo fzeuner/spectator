@@ -5,7 +5,7 @@ This package contains all UI components organized by functionality.
 """
 
 # Base widgets
-from .base_widgets import BasePlotWidget, BaseControlWidget, BaseImageWidget
+from .base_widgets import BasePlotWidget, BaseControlWidget, BaseImageWidget, CustomVerticalLabel
 
 # Spectrum widgets
 from .spectrum_widgets import SpectrumPlotWidget, SpectrumImageWidget
@@ -23,6 +23,7 @@ __all__ = [
     'BasePlotWidget',
     'BaseControlWidget', 
     'BaseImageWidget',
+    'CustomVerticalLabel',
     
     # Spectrum widgets
     'SpectrumPlotWidget',

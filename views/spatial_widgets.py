@@ -87,14 +87,14 @@ class SpatialPlotWidget(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
         
         # Horizontal crosshair line
-        self.hLine = AddLine(self.plotItem, self.crosshair_colors['h_spectrum_image'], 0, moveable=True)
+        self.hLine = add_line(self.plotItem, self.crosshair_colors['h_spectrum_image'], 0, moveable=True)
         
         # Average region label
         self.label_avg = pg.LabelItem(justify='left', size='6pt', color=self.avg_colors[1])
         self.graphics_widget.addItem(self.label_avg, row=1, col=1)
         
         # Initialize plot appearance
-        InitializeSpectrumplotItem(self.plotItem, y_label="x", x_label="", x_units="")
+        initialize_spectrum_plot_item(self.plotItem, y_label="x", x_label="", x_units="")
     
     def _setup_connections(self):
         """Connect signals to slots."""

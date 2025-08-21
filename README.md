@@ -59,7 +59,7 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 
 2. **Install required packages:**
    ```bash
-   conda install numpy pyqtgraph qdarkstyle scipy
+   conda install numpy pyqtgraph=0.13.2 qdarkstyle scipy
    pip install PyQt5  # or PyQt6
    ```
 
@@ -69,13 +69,21 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
    cd spectator
    ```
 
+4. **Stupid fix for pyqtgraph:**
+   ```bash
+   mv miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py_bk
+   cp utils/VerticalLabel.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/widgets/
+   mv miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py_bk
+   cp utils/Dock.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/
+   ```
+
 ## Usage
 
 ### Quick Start
 
 **Run the example application:**
 ```bash
-conda activate dkist
+conda activate spectator
 python examples/spectator_example.py
 ```
 

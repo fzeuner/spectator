@@ -8,13 +8,9 @@ with arbitrary axis ordering and generates appropriate viewers based on the
 data structure and user specifications.
 
 Supported dimensions:
-- 1D: spatial, spectral, time
-- 2D: any combination of the above
-- 3D: states + any 2 of the above, or any 3 of spatial, spectral, time
-- 4D: states + any 3 of the above, or spatial + spatial + spectral + time
-- 5D: states + spectral + spatial + spatial + time (maximum)
 
-Author: Data Manager System
+- 3D: states +  spatial + spectral
+
 """
 
 import numpy as np
@@ -23,7 +19,8 @@ from enum import Enum
 import warnings
 # local imports
 import sys
-sys.path.append(r"/home/zeuner/CascadeProjects/windsurf-project/")
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class AxisType(Enum):
     """Enumeration of supported axis types."""
@@ -256,24 +253,6 @@ class DataScaler:
         self.states_axis_index = None
         # Target: keep final data values under 10 for better histogram display
         self.target_max_value = 10.0
-        self.scale_thresholds = {
-            'large': {
-                1e12: (1e-12, -12, "10^-12"),
-                1e9: (1e-9, -9, "10^-9"),
-                1e6: (1e-6, -6, "10^-6"),
-                1e3: (1e-3, -3, "10^-3"),
-                100: (1e-2, -2, "10^-2"),
-                10: (1e-1, -1, "10^-1"),
-            },
-            'small': {
-                1e-12: (1e12, 12, "10^12"),
-                1e-9: (1e9, 9, "10^9"),
-                1e-6: (1e6, 6, "10^6"),
-                1e-3: (1e3, 3, "10^3"),
-                1e-2: (1e2, 2, "10^2"),
-                1e-1: (1e1, 1, "10^1"),
-            }
-        }
     
     def analyze_data_range(self, data: np.ndarray) -> Tuple[float, int, str]:
         """
@@ -321,21 +300,6 @@ class DataScaler:
             label = ""
         
         return scale_factor, exponent, label
-    
-    def _format_exponent(self, exp: int) -> str:
-        """Format exponent with superscript characters."""
-        if exp == 0:
-            return ""
-        
-        # Superscript digits mapping
-        superscript = {
-            '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-            '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-            '-': '⁻'
-        }
-        
-        exp_str = str(exp)
-        return ''.join(superscript.get(c, c) for c in exp_str)
     
     def scale_data(self, data: np.ndarray, target_axes: list, auto_scale: bool = True) -> np.ndarray:
         """
@@ -456,18 +420,7 @@ class Manager:
         Examples:
             # 3D data: states, spectral, spatial
             display_data(data, 'states', 'spectral', 'spatial', title='Test', state_names=['I','Q'])
-            
-            # 3D data: states, spatial, spectral (will be rearranged)
-            display_data(data, 'states', 'spatial', 'spectral', title='Test', state_names=['I','Q'])
-            
-            # 3D data with default state names (numbers)
-            display_data(data, 'states', 'spectral', 'spatial', title='Test')
-            
-            # 2D data: spectral, spatial
-            display_data(data, 'spectral', 'spatial', title='Test')
-            
-            # 4D data: states, spectral, spatial, spatial
-            display_data(data, 'states', 'spectral', 'spatial', 'spatial', title='Test', state_names=['I','Q'])
+
         """
         # Parse input arguments
         input_axes, states_info = self._parse_input_args(data, state_names, axes)
@@ -487,6 +440,10 @@ class Manager:
         # Apply data scaling for better visualization
         auto_scale = kwargs.get('auto_scale', True)  # Allow disabling auto-scaling
         scaled_data = self.scaler.scale_data(rearranged_data, target_axes, auto_scale=auto_scale)
+        
+        # Print current code path being used
+        current_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        print(f"Using code path: {current_path}")
         
         # Log scaling information if scaling was applied
         scale_info = self.scaler.get_scale_info()
@@ -662,25 +619,7 @@ def display_data(data: np.ndarray,
         
     Examples:
         # 3D data: states, spectral, spatial
-        display_data(data, 'states', 'spectral', 'spatial', title='Test data', state_names=['I','Q'])
-        
-        # Same data but with different input order (will be rearranged)
-        display_data(data, 'states', 'spatial', 'spectral', title='Test data', state_names=['I','Q'])
-        
-        # 3D data with default state names (numbers)
-        display_data(data, 'states', 'spectral', 'spatial', title='Test data')
-        
-        # 2D spectral-spatial data
-        display_data(data, 'spectral', 'spatial', title='2D data')
-        
-        # 1D spectral data
-        display_data(data, 'spectral', title='Spectrum')
-        
-        # 4D data with two spatial dimensions
-        display_data(data, 'states', 'spectral', 'spatial', 'spatial', title='4D data', state_names=['I','Q'])
-        
-        # 5D data (maximum)
-        display_data(data, 'states', 'spectral', 'spatial', 'spatial', 'time', title='5D data', state_names=['I','Q','U','V'])
+
     """
     return data_manager.display_data(data, *axes, title=title, state_names=state_names, **kwargs)
 

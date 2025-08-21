@@ -6,8 +6,10 @@ This module contains the fundamental UI components that other widgets inherit fr
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
+from pyqtgraph.widgets.VerticalLabel import VerticalLabel as PgVerticalLabel
 from typing import Optional
+import warnings
 
 # Import our models for configuration
 from models import get_default_crosshair_colors, get_default_averaging_colors, get_default_min_line_distance
@@ -17,6 +19,60 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.colors import getWidgetColors
+
+
+class CustomVerticalLabel(PgVerticalLabel):
+    """
+    Custom VerticalLabel that extends pyqtgraph's VerticalLabel with minimum size constraints.
+    
+    This addresses the issue where vertical labels can become too small to be visible.
+    Sets minimum width/height to 25 pixels instead of 0.
+    """
+    
+    def __init__(self, text, orientation='vertical', forceWidth=True):
+        """
+        Initialize the custom vertical label.
+        
+        Args:
+            text: Label text
+            orientation: 'vertical' or 'horizontal'
+            forceWidth: Whether to force minimum width based on text
+        """
+        super().__init__(text, orientation, forceWidth)
+    
+    def paintEvent(self, ev):
+        """Override paintEvent to apply custom minimum size constraints."""
+        p = QtGui.QPainter(self)
+        
+        if self.orientation == 'vertical':
+            p.rotate(-90)
+            rgn = QtCore.QRect(-self.height(), 0, self.height(), self.width())
+        else:
+            rgn = self.contentsRect()
+        align = self.alignment()
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.hint = p.drawText(rgn, align, self.text())
+        p.end()
+        
+        # Apply custom minimum size constraints (Franzi's modifications)
+        if self.orientation == 'vertical':
+            self.setMaximumWidth(self.hint.height())
+            self.setMinimumWidth(25)  # Changed from 0 to 25
+            self.setMaximumHeight(16777215)
+            if self.forceWidth:
+                self.setMinimumHeight(self.hint.width())
+            else:
+                self.setMinimumHeight(25)  # Changed from 0 to 25
+        else:
+            self.setMaximumHeight(self.hint.height())
+            self.setMinimumHeight(25)  # Changed from 0 to 25
+            self.setMaximumWidth(16777215)
+            if self.forceWidth:
+                self.setMinimumWidth(self.hint.width())
+            else:
+                self.setMinimumWidth(25)  # Changed from 0 to 25
 
 
 class BasePlotWidget(QtWidgets.QWidget):
@@ -39,7 +95,7 @@ class BasePlotWidget(QtWidgets.QWidget):
         self.layout = QtWidgets.QHBoxLayout(self)
         self.graphics_widget = pg.GraphicsLayoutWidget()
         self.graphics_widget.setBackground(getWidgetColors().get('background', '#19232D'))
-        self.plotItem = self.graphics_widget.addPlot(row=0, col=0, colspan=2)
+        self.plotItem = self.graphics_widget.addPlot(row=0, col=0, colspan=3)
         self.layout.addWidget(self.graphics_widget)
         self.setLayout(self.layout)
         
