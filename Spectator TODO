@@ -5,9 +5,13 @@ Create packaging with pyinstaller
 
 different averaging regions
 
-show the scaling factor of the data
+add other viewers 
 
-scaling of newly load data not working
+.fits file loading?
+
+synchronizing zooming and panning?
+
+memory efficiency?
 
 clean up some functions which are not used anymore?
 
