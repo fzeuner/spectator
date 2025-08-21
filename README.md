@@ -1,6 +1,6 @@
-# Spectator - Spectral Data Viewer
+# Spectator - Spectropolarimetric Data Viewer
 
-A modern Python-based spectral data visualization application with advanced features for multi-dimensional spectroscopic data analysis.
+A modern Python-based data visualization application with advanced features for multi-dimensional spectropolarimetric data analysis.
 
 ## Table of Contents
 
@@ -20,22 +20,27 @@ A modern Python-based spectral data visualization application with advanced feat
 
 ## About
 
-Spectator is a sophisticated spectral data viewer designed to replace IDL Z3showred for the analysis and visualization of multi-dimensional spectroscopic data, particularly Stokes parameter data from polarimetric observations. Built with a modern Model-View-Controller (MVC) architecture, it provides interactive visualization capabilities for complex spectral datasets.
+Spectator is a data viewer designed to replace and extent IDL Z3showred for the analysis and visualization of multi-dimensional spectropolarimetric data. Built with a modern Model-View-Controller (MVC) architecture, it provides interactive visualization capabilities for complex spectral datasets.
+My idea is that you can provide numpy data arrays with up to 5 dimensions, where each dimension is of type "spatial", "spectral", "states" or "time". Depending on the combination of types, my Data manager will chose the correct viewer for you.
 
 ## Features
 
 ### Core Functionality
-- **Multi-dimensional Data Support**: IN THE FUTURE Handle 2D, 3D, and 4D spectral datasets
-- **Stokes Parameter Visualization**: Specialized support for polarimetric data (I, Q, U, V)
-- **Interactive Crosshairs**: Synchronized navigation across multiple views
+- **3D Data Support**: 3D numpy array with spectral, spatial and states
+- **Interactive Crosshairs**: Synchronized navigation across multiple views to show the spectrum
 - **Real-time Averaging**: Spectral and spatial averaging with visual feedback
 - **Dynamic Data Scaling**: Per-state automatic scaling for optimal visualization
 
 ### Advanced Features
 - **Flexible Data Loading**: Support for numpy arrays with arbitrary data structure (you can specify which axis belongs to which parameter, and a manager takes care of the correct display)
 - **Synchronized Views**: Spectrum, spectrum image, and spatial profile windows
-- **Dark Theme Support**: Modern UI with customizable color schemes
-- **Memory Efficient**: Optimized for large datasets with smart data management - IN THE FUTURE maybe
+- **ZIMPOL data loading**: load a ZIMPOL file directly
+
+### Future Features
+- support more different types of data (e.g., 2D spectral/spatial, spatial/time, spectral/time, 3D, 4D, etc...)
+- improve memory efficiency for large data sets
+- should zooming and panning also be synchronizable?
+- .fits file loading
 
 ## Installation
 
@@ -92,17 +97,16 @@ viewer = display_data(data, 'states', 'spectral', 'spatial',
                      state_names=['I', 'Q', 'U', 'V'])
 ```
 
-**File Browser (if available):**
+**ZIMPOL File Browser (if available):**
 - Use the file listing controller to browse .dat files
-- Automatic filtering for spectral data files
-- Support for directory-based data organization
+- Automatic filtering for science data files
 
 ### Interactive Features
 
 **Navigation:**
-- **Crosshairs**: Click and drag to navigate through spectral and spatial dimensions
+- **Crosshairs**: Move to navigate through spectral and spatial dimensions
 - **Synchronized Views**: All windows update simultaneously for consistent data exploration
-- **Zoom and Pan**: Mouse wheel and drag operations for detailed examination
+- **Zoom and Pan**: Mouse wheel and drag operations for detailed examination (not synchronized)
 
 **Analysis Tools:**
 - **Spectral Averaging**: Select wavelength ranges for averaged profiles
@@ -130,12 +134,6 @@ Spectator follows a **Model-View-Controller (MVC)** architecture pattern for mai
   - `Manager`: High-level data management and scaling
   - `FileLoadingController`, `FileListingController`: File operations
   - `app_controller`: Main application entry point with `display_data()` function
-
-### Key Features
-
-- **Data Scaling**: Automatic per-state scaling for optimal visualization
-- **Synchronization**: Coordinated updates across multiple views
-- **Extensibility**: Modular design allows easy addition of new features
 
 ## Development
 
