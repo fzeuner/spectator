@@ -59,16 +59,10 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     
     # Connect file selection to loading
     file_widget.fileSelected.connect(file_loading_controller.load_file)
-    # Debug: log selected file
-    try:
-        file_widget.fileSelected.connect(lambda p: print(f"[DEBUG][spectator] fileSelected: {p}"))
-    except Exception:
-        pass
     
     # Create data update function
     def update_spectator_data(new_data: np.ndarray, new_state_names: List[str] = None):
         """Update the spectator with new data without recreating the entire interface."""
-        print(f"Updating spectator with new data: {new_data.shape}")
         # Reset previous scaling and apply fresh scaling to the new data
         try:
             data_manager.reset_data_scaling()
