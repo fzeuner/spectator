@@ -45,9 +45,11 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 - **Single-sided wavelength limits**: You can set only min or only max in the controls; the other side auto-expands to data bounds.
 
 ### Future Features
+- installation simplification
 - support more different types of data (e.g., 2D spectral/spatial, spatial/time, spectral/time, 3D, 4D, etc...)
 - improve memory efficiency for large data sets
 - should zooming and panning also be synchronizable?
+- how to make a monkey patch for the pyqtrgaph widgets Dock and VerticalLabel?
 - .fits file loading
 
 ## Installation
