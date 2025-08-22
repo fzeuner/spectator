@@ -77,7 +77,7 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 
 3. **Clone and navigate to the project:**
    ```bash
-   git clone git@github.com:fzeuner/spectator.git
+   git clone https://github.com/fzeuner/spectator.git
    cd spectator
    ```
 
