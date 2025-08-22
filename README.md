@@ -33,10 +33,16 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 - **Real-time Averaging**: Spectral and spatial averaging with visual feedback
 - **Dynamic Data Scaling**: Per-state automatic scaling for optimal visualization
 
+### Feature Highlight: AveragingLineManager
+- **Unified Averaging Lines**: `utils/averaging_lines.py` introduces `AveragingLineManager`, a reusable manager for both spectral (vertical) and spatial (horizontal) averaging lines.
+- **Robust Syncing**: Signal blocking prevents recursion and feedback loops when syncing lines across windows.
+- **Consistent UX**: Preserves averaging width while moving center/outer lines and applies orientation-specific logic uniformly.
+
 ### Advanced Features
 - **Flexible Data Loading**: Support for numpy arrays with arbitrary data structure (you can specify which axis belongs to which parameter, and a manager takes care of the correct display)
 - **Synchronized Views**: Spectrum, spectrum image, and spatial profile windows
 - **ZIMPOL data loading**: load a ZIMPOL file directly
+- **Single-sided wavelength limits**: You can set only min or only max in the controls; the other side auto-expands to data bounds.
 
 ### Future Features
 - support more different types of data (e.g., 2D spectral/spatial, spatial/time, spectral/time, 3D, 4D, etc...)
@@ -130,20 +136,24 @@ Spectator follows a **Model-View-Controller (MVC)** architecture pattern for mai
 
 ### Core Components
 
-- **Models** (`models/`): Data structures and business logic
-  - `SpectrumImageData`, `SpatialData`, `SpectrumData`: Core data models
-  - `CrosshairState`, `AveragingRegion`: State management
-  - `ViewerSettings`: Configuration management
+- **Models** (`models/`): Data structures and metadata
+  - `data_model.py`: Wraps loaded arrays and exposes (states, spectral, spatial) ordering
+  - `file_model.py`: ZIMPOL file metadata and filtering helpers
 
-- **Views** (`views/`): User interface components
-  - `StokesSpectrumWindow`, `StokesSpectrumImageWindow`, `StokesSpatialWindow`: Main display windows
-  - `SpectrumPlotWidget`, `SpectrumImageWidget`, `SpatialPlotWidget`: Reusable plot components
-  - `BasePlotWidget`: Common functionality base class
+- **Views** (`views/`): UI and plotting widgets
+  - `windows.py`: Main windows (spectrum, spectrum image, spatial) and their wiring
+  - `base_widgets.py`: Common plotting helpers and base UI pieces
+  - `control_widgets.py`: Controls (limits, toggles, file browser)
 
-- **Controllers** (`controllers/`): Application logic and coordination
-  - `Manager`: High-level data management and scaling
-  - `FileLoadingController`, `FileListingController`: File operations
-  - `app_controller`: Main application entry point with `display_data()` function
+- **Controllers** (`controllers/`): Coordination and app entry points
+  - `app_controller.py`: `display_data()` entry, data updates, scaling, signal connections
+  - `viewers.py`: Viewer construction and signal wiring
+  - `file_controllers.py`: File list, filters, and selection handling
+
+- **Utils** (`utils/`): Shared helpers
+  - `averaging_lines.py`: `AveragingLineManager` for spectral/spatial averaging lines
+  - `plotting.py`: Plot setup, range helpers, histograms, themes
+  - `colors.py`, `Dock.py`, `VerticalLabel.py`: Styling and PyQtGraph overrides
 
 ## Development
 
@@ -152,31 +162,26 @@ Spectator follows a **Model-View-Controller (MVC)** architecture pattern for mai
 ```text
 spectator/
 ├── README.md
-├── controllers/          # Application logic
-│   ├── app_controller.py # Main entry point
-│   ├── viewers.py        # Viewer creation
-│   └── file_controllers.py
-├── models/              # Data models
-│   ├── spectrum_model.py
+├── controllers/              # Application logic
+│   ├── app_controller.py     # Main entry points and data display
+│   ├── file_controllers.py   # File listing/selection utilities
+│   └── viewers.py            # Viewer construction and wiring
+├── models/                   # Data models
 │   ├── data_model.py
-│   └── viewer_config.py
-├── views/               # UI components
-│   ├── windows.py       # Main windows
-│   ├── spectrum_widgets.py
-│   └── base_widgets.py
-├── utils/               # Utilities
-│   ├── plotting.py
+│   └── file_model.py
+├── utils/                    # Utilities and helpers
+│   ├── averaging_lines.py    # AveragingLineManager (spectral/spatial lines)
+│   ├── plotting.py           # Plot helpers (ranges, axes, histograms)
 │   ├── colors.py
-│   └── data_utils.py
-└── examples/            # Example scripts
+│   ├── Dock.py               # PyQtGraph Dock override
+│   └── VerticalLabel.py      # PyQtGraph VerticalLabel override
+├── views/                    # UI components
+│   ├── base_widgets.py
+│   ├── control_widgets.py    # Controls (limits, toggles, file browser)
+│   └── windows.py            # Main windows (spectrum, image, spatial)
+└── examples/                 # Example scripts
     └── spectator_example.py
-### Contributing
-
-1. **Fork the repository** and create a feature branch
-2. **Follow the MVC pattern** when adding new functionality
-3. **Test your changes** with the example script
-4. **Update documentation** for new features
-5. **Submit a pull request** with a clear description
+```
 
 ### Development Guidelines
 
