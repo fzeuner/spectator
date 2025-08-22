@@ -16,12 +16,8 @@ from utils.info_formatter import format_info_to_html
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models import (
-    CrosshairState, AveragingRegion, ViewerSettings,
-    SpectrumImageData, SpatialData, SpectrumData
-)
+# Note: Models import removed; unused in this controller
 from views import (
-    SpectrumPlotWidget, SpectrumImageWidget, SpatialPlotWidget,
     LinesControlGroup, SpectrumLimitControlGroup, PlotControlWidget
 )
 from views.windows import (
@@ -231,9 +227,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         
     # Connect file loading controller to data update function
     file_loading_controller.dataLoaded.connect(update_spectator_data)
-    spectra: List[SpectrumPlotWidget] = []
-    image_spectra: List[SpectrumImageWidget] = []
-    spatial: List[SpatialPlotWidget] = []
+    spectra: List[Any] = []
+    image_spectra: List[Any] = []
+    spatial: List[Any] = []
     docks: Dict[str, Dict[str, Dock]] = {"spectrum": {}, "spec_img": {}, "spatial": {}} # Store docks by type and name
 
     

@@ -5,10 +5,6 @@ This package contains all data models and configuration classes.
 """
 
 from .data_model import SpectralData, AxisType, AxisConfiguration
-from .spectrum_model import (
-    SpectrumImageData, SpatialData, SpectrumData,
-    CrosshairState, AveragingRegion
-)
 from .viewer_config import (
     ViewerSettings, ViewerType, ColorScheme, PlotConfiguration,
     PlotLimits, SynchronizationSettings,
@@ -21,13 +17,6 @@ __all__ = [
     'SpectralData',
     'AxisType', 
     'AxisConfiguration',
-    
-    # Spectrum-specific models
-    'SpectrumImageData',
-    'SpatialData',
-    'SpectrumData',
-    'CrosshairState',
-    'AveragingRegion',
     
     # Configuration models
     'ViewerSettings',

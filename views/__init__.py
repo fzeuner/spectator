@@ -7,11 +7,7 @@ This package contains all UI components organized by functionality.
 # Base widgets
 from .base_widgets import BasePlotWidget, BaseControlWidget, BaseImageWidget, CustomVerticalLabel
 
-# Spectrum widgets
-from .spectrum_widgets import SpectrumPlotWidget, SpectrumImageWidget
-
-# Spatial widgets
-from .spatial_widgets import SpatialPlotWidget
+# Spectrum/Spatial widgets removed (legacy modules)
 
 # Control widgets
 from .control_widgets import (
@@ -25,12 +21,7 @@ __all__ = [
     'BaseImageWidget',
     'CustomVerticalLabel',
     
-    # Spectrum widgets
-    'SpectrumPlotWidget',
-    'SpectrumImageWidget',
-    
-    # Spatial widgets
-    'SpatialPlotWidget',
+    # (legacy Spectrum/Spatial widgets removed)
     
     # Control widgets
     'LinesControlGroup',
