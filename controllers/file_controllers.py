@@ -37,6 +37,12 @@ class FileLoadingController(QtCore.QObject):
         # Load user configuration (non-fatal if missing)
         ensure_example_config()
         self._config = load_config()
+        # Store resolved base parent directory from config for comparisons
+        try:
+            base_dir_cfg = self._config.get('default_data_base_dir', '')
+            self._base_parent_dir = os.path.abspath(os.path.expanduser(base_dir_cfg)) if base_dir_cfg else ''
+        except Exception:
+            self._base_parent_dir = ''
         
     def load_file(self, file_path: str):
         """
@@ -350,7 +356,7 @@ class FileListingController(QtWidgets.QWidget):
 
             # Never list files directly for the configured base (parent) directory; show its subdirectories instead
             try:
-                if selected_paths and self._start_directory and os.path.abspath(selected_paths[0]) == os.path.abspath(self._start_directory):
+                if selected_paths and self._base_parent_dir and os.path.abspath(selected_paths[0]) == os.path.abspath(self._base_parent_dir):
                     self._populate_directories(selected_paths[0])
                     return
             except Exception:
@@ -466,7 +472,8 @@ class FileListingController(QtWidgets.QWidget):
         """Compute the initial directory for the file chooser based on config.
 
         If auto_navigate_recent is True, return the most recent YYMMDD subdirectory
-        within default_data_base_dir. Otherwise return default_data_base_dir.
+        within default_data_base_dir. Supports an optional 4-digit year layer:
+        base_dir/YYYY/YYMMDD. Otherwise return default_data_base_dir.
         """
         import re
         base_dir = self._config.get('default_data_base_dir')
@@ -479,22 +486,82 @@ class FileListingController(QtWidgets.QWidget):
         if not self._config.get('auto_navigate_recent', False):
             return base_dir
 
-        # Find subdirectories with YYMMDD name format and pick the latest
-        yymmdd_re = re.compile(r'^[0-9]{6}$')
-        candidates = []
+        # Find subdirectories containing a YYMMDD token (may have prefixes/suffixes)
+        # at base level OR within optional 4-digit year folders (e.g., 2025/250822).
+        # Pick the latest valid date.
+        yymmdd_re = re.compile(r'(\d{6})')
+        year_re = re.compile(r'^(19|20)\d{2}$')
+
+        def extract_token(name: str) -> str | None:
+            m = yymmdd_re.search(name)
+            return m.group(1) if m else None
+
+        def parse_yymmdd(token: str, fallback_year: int | None = None):
+            yy = int(token[0:2])
+            mm = int(token[2:4])
+            dd = int(token[4:6])
+            # Basic sanity checks on month/day
+            if not (1 <= mm <= 12 and 1 <= dd <= 31):
+                return None
+            year = (2000 + yy) if fallback_year is None else fallback_year
+            return year, mm, dd
+
+        best_tuple = None  # (year, mm, dd, path)
+
         try:
             for entry in os.listdir(base_dir):
                 full = os.path.join(base_dir, entry)
-                if os.path.isdir(full) and yymmdd_re.match(entry):
-                    candidates.append(entry)
+                if not os.path.isdir(full):
+                    continue
+
+                # Case 1: base_dir/... with a YYMMDD token in the name
+                token = extract_token(entry)
+                if token:
+                    parsed = parse_yymmdd(token)
+                    if parsed is not None:
+                        y, m, d = parsed
+                        tup = (y, m, d, full)
+                        if best_tuple is None or tup[:3] > best_tuple[:3]:
+                            best_tuple = tup
+                        # Do not continue here; a dir can also be a YYYY year dir
+
+                # Case 2: base_dir/YYYY/YYMMDD
+                if year_re.match(entry):
+                    year_val = int(entry)
+                    try:
+                        for sub in os.listdir(full):
+                            sub_full = os.path.join(full, sub)
+                            if os.path.isdir(sub_full):
+                                sub_token = extract_token(sub)
+                                if sub_token:
+                                    parsed = parse_yymmdd(sub_token, fallback_year=year_val)
+                                    if parsed is not None:
+                                        y, m, d = parsed
+                                        tup = (y, m, d, sub_full)
+                                        if best_tuple is None or tup[:3] > best_tuple[:3]:
+                                            best_tuple = tup
+                    except Exception:
+                        # ignore unreadable year dir
+                        pass
         except Exception:
+            # If listing base_dir fails, fall back
             return base_dir
 
-        if not candidates:
+        if best_tuple is None:
             return base_dir
 
-        most_recent = max(candidates)
-        return os.path.join(base_dir, most_recent)
+        chosen = best_tuple[3]
+        # If a specific subdirectory is required (e.g., 'reduced'), and it exists
+        # inside the chosen date directory, auto-descend into it.
+        try:
+            must_dir = self._config.get('must_be_in_directory')
+        except Exception:
+            must_dir = None
+        if must_dir:
+            candidate = os.path.join(chosen, must_dir)
+            if os.path.isdir(candidate):
+                return candidate
+        return chosen
 
         
     def all_dat_files(self, directories, excludes=None, in_dir=None):

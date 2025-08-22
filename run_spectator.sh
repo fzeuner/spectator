@@ -17,6 +17,18 @@ if [[ ! -f "${TARGET_ABS}" ]]; then
   exit 1
 fi
 
+# Environment adjustments for remote servers / headless / mismatched runtime dir
+# 1) Ensure XDG_RUNTIME_DIR is owned by current UID and has 0700 perms
+export XDG_RUNTIME_DIR="/tmp/xdg-runtime-$(id -u)"
+mkdir -p "${XDG_RUNTIME_DIR}" 2>/dev/null || true
+chmod 700 "${XDG_RUNTIME_DIR}" 2>/dev/null || true
+
+# 2) Force software rendering to avoid GPU/GLX issues on servers
+export LIBGL_ALWAYS_SOFTWARE=1
+export QT_OPENGL=software
+export QT_QUICK_BACKEND=software
+export QT_QPA_PLATFORM=xcb
+
 # Prefer 'conda run' for reliability across shells
 if command -v conda >/dev/null 2>&1; then
   # Ensure environment exists
