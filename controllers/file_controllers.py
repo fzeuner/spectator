@@ -52,6 +52,7 @@ class FileLoadingController(QtCore.QObject):
             file_path: Path to the .dat file to load
         """
         try:
+            print(f"[DEBUG][FileLoadingController] load_file called with: {file_path}")
             if not isinstance(file_path, str) or not file_path:
                 raise ValueError("Invalid file path provided to load_file")
             if not os.path.isfile(file_path):
@@ -62,16 +63,20 @@ class FileLoadingController(QtCore.QObject):
             
             # Get the images array
             images_array = reader.getDatImagesArray()
+            print(f"[DEBUG][FileLoadingController] images_array length: {len(images_array) if images_array is not None else 'None'}")
             
             # Stack all images along the first axis (states axis)
             if not images_array:
                 raise ValueError("Empty images array")
             
             raw_data_array = np.stack(images_array, axis=0)
+            print(f"[DEBUG][FileLoadingController] raw_data_array shape: {raw_data_array.shape}")
             # Raw data is (states, spatial, spectral)
             
-            # Extract processed state names (aligned with images, excludes 'info')
-            state_names = reader.getStateNames()
+            # Extract state names from the raw data keys
+            raw_data = reader.getDat()
+            state_names = list(raw_data.keys()) if raw_data else None
+            print(f"[DEBUG][FileLoadingController] raw_data keys: {list(raw_data.keys()) if isinstance(raw_data, dict) else type(raw_data)}")
             # Store file info for later display
             try:
                 self.current_info = reader.getDatInfo()
@@ -94,6 +99,7 @@ class FileLoadingController(QtCore.QObject):
                 input_axes=input_axes,
                 target_axes=target_axes
             )
+            print(f"[DEBUG][FileLoadingController] processed_data shape: {processed_data.shape}")
             
             # Data successfully loaded and processed
             
@@ -102,11 +108,13 @@ class FileLoadingController(QtCore.QObject):
             self.current_file_path = file_path
             
             # Emit signal with loaded data
+            print("[DEBUG][FileLoadingController] Emitting dataLoaded")
             self.dataLoaded.emit(processed_data, state_names)
                 
         except Exception as e:
             import traceback
             error_msg = f"Error loading file {file_path}: {str(e)}\n{traceback.format_exc()}"
+            print("[DEBUG][FileLoadingController] " + error_msg)
             self.loadingError.emit(error_msg)
     
     def _process_images_for_viewer(self, images_array: List[np.ndarray]) -> np.ndarray:
@@ -294,6 +302,7 @@ class FileListingController(QtWidgets.QWidget):
         try:
             # Extract the item number from the display text (e.g., "1. filename.dat")
             item_text = item.text()
+            print(f"[DEBUG][FileListingController] item clicked: '{item_text}' mode={self._listing_mode}")
             
             # Skip if this is an info message (no files found)
             if not item_text or item_text.startswith("No .dat files") or item_text.startswith("Requirements") or item_text.startswith("•"):
@@ -304,6 +313,7 @@ class FileListingController(QtWidgets.QWidget):
             if self._listing_mode == 'files':
                 if 0 <= item_number < len(self.file_paths):
                     file_path = self.file_paths[item_number]
+                    print(f"[DEBUG][FileListingController] emitting fileSelected: {file_path}")
                     # Emit signal with the selected file path
                     self.fileSelected.emit(file_path)
             elif self._listing_mode == 'dirs':
