@@ -41,6 +41,9 @@ class LinesControlGroup(QtWidgets.QWidget):
         super().__init__(parent)
         # This layout will hold your QGroupBoxes
         self.main_v_layout = QtWidgets.QVBoxLayout(self) # Set the layout directly on self
+        # Track how many regions exist across all states
+        self.spectral_regions = 0
+        self.spatial_regions = 0
 
         # QGroupBox for Synchronization buttons
         self.synchronize_box = QtWidgets.QGroupBox("Synchronize")
@@ -51,14 +54,16 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.sync_button.clicked.connect(self._on_toggle_crosshair_sync) # Connect to internal handler
         sync_box_layout.addWidget(self.sync_button)
 
-        self.sync_button_y_avg = QtWidgets.QPushButton("<spatial>.")
+        self.sync_button_y_avg = QtWidgets.QPushButton("<spatial>")
         self.sync_button_y_avg.setCheckable(True)
         self.sync_button_y_avg.clicked.connect(self._on_toggle_avg_y_sync) # Connect to internal handler
+        self.sync_button_y_avg.setEnabled(False)  # Only enabled when any spatial region exists
         sync_box_layout.addWidget(self.sync_button_y_avg)
 
-        self.sync_button_x_avg = QtWidgets.QPushButton("<spectral>.")
+        self.sync_button_x_avg = QtWidgets.QPushButton("<spectral>")
         self.sync_button_x_avg.setCheckable(True)
         self.sync_button_x_avg.clicked.connect(self._on_toggle_avg_x_sync) # Connect to internal handler
+        self.sync_button_x_avg.setEnabled(False)  # Only enabled when any spectral region exists
         sync_box_layout.addWidget(self.sync_button_x_avg)
 
         self.main_v_layout.addWidget(self.synchronize_box) # Add the group box to the main layout
@@ -156,21 +161,33 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.button_remove_x_avg.setProperty('auto_activated', True)  # Mark as auto-activated
         self.button_remove_x_avg.setChecked(True)
         self.button_remove_x_avg.setStyleSheet("background-color: red;")
+        self.button_remove_x_avg.setEnabled(True)
     
     def activate_spatial_button(self):
         """Activate spatial averaging button when averaging is added."""
         self.button_remove_y_avg.setProperty('auto_activated', True)  # Mark as auto-activated
         self.button_remove_y_avg.setChecked(True)
         self.button_remove_y_avg.setStyleSheet("background-color: red;")
+        self.button_remove_y_avg.setEnabled(True)
+
+    def deactivate_spectral_button(self):
+        """Deactivate spectral averaging button when no region exists."""
+        self.button_remove_x_avg.setChecked(False)
+        self.button_remove_x_avg.setStyleSheet("")
+        # Keep enabled so users can recreate regions
+
+    def deactivate_spatial_button(self):
+        """Deactivate spatial averaging button when no region exists."""
+        self.button_remove_y_avg.setChecked(False)
+        self.button_remove_y_avg.setStyleSheet("")
+        # Keep enabled so users can recreate regions
     
     def _on_avg_type_changed(self, button):
         """Handle radio button selection change for averaging type."""
         button_id = self.avg_type_group.id(button)
         if button_id == 0:  # Spectral selected
-            print("Averaging type changed to: spectral")
             self.spectralAveragingEnabled.emit(True)  # Enable spectral averaging
         elif button_id == 1:  # Spatial selected
-            print("Averaging type changed to: spatial")
             self.spectralAveragingEnabled.emit(False)  # Disable spectral averaging
 
     # Methods to update button states externally
@@ -185,6 +202,40 @@ class LinesControlGroup(QtWidgets.QWidget):
     def set_avg_y_sync_state(self, checked: bool):
         self.sync_button_y_avg.setChecked(checked)
         self.sync_button_y_avg.setStyleSheet("background-color: red;" if checked else "")
+
+    # Notification methods from windows to control sync button availability
+    def notify_spectral_region_added(self):
+        # Enable spectral sync button when at least one region exists
+        if self.spectral_regions == 0:
+            self.sync_button_x_avg.setEnabled(True)
+        self.spectral_regions += 1
+
+    def notify_spatial_region_added(self):
+        if self.spatial_regions == 0:
+            self.sync_button_y_avg.setEnabled(True)
+        self.spatial_regions += 1
+
+    def notify_spectral_region_removed(self):
+        if self.spectral_regions > 0:
+            self.spectral_regions -= 1
+            if self.spectral_regions == 0:
+                # Turn off and disable spectral sync
+                if self.sync_button_x_avg.isChecked():
+                    # Emit off state so listeners can disable sync behavior
+                    self.toggleAvgXSync.emit(False)
+                self.sync_button_x_avg.setChecked(False)
+                self.sync_button_x_avg.setStyleSheet("")
+                self.sync_button_x_avg.setEnabled(False)
+
+    def notify_spatial_region_removed(self):
+        if self.spatial_regions > 0:
+            self.spatial_regions -= 1
+            if self.spatial_regions == 0:
+                if self.sync_button_y_avg.isChecked():
+                    self.toggleAvgYSync.emit(False)
+                self.sync_button_y_avg.setChecked(False)
+                self.sync_button_y_avg.setStyleSheet("")
+                self.sync_button_y_avg.setEnabled(False)
 
 
 class SpectrumLimitControlGroup(BaseControlWidget):
@@ -474,13 +525,35 @@ class PlotControlWidget(QtWidgets.QWidget):
     
     def _wavelength_range_changed(self):
         """Handle wavelength range change."""
-        try:
-            min_val = float(self.wavelength_min_edit.text())
-            max_val = float(self.wavelength_max_edit.text())
-            if min_val < max_val:
-                self.xlamRangeChanged.emit(min_val, max_val)
-        except ValueError:
-            pass  # Invalid input, ignore
+        min_text = self.wavelength_min_edit.text().strip()
+        max_text = self.wavelength_max_edit.text().strip()
+
+        # Parse values if present; empty -> None
+        min_val = None
+        max_val = None
+        if min_text:
+            try:
+                min_val = float(min_text)
+            except ValueError:
+                min_val = None
+        if max_text:
+            try:
+                max_val = float(max_text)
+            except ValueError:
+                max_val = None
+
+        # If both absent or both invalid, do nothing
+        if min_val is None and max_val is None:
+            return
+
+        # If both provided, validate order
+        if (min_val is not None) and (max_val is not None):
+            if min_val >= max_val:
+                # Invalid range -> ignore change
+                return
+
+        # Emit with None for the unspecified side; plotting util will expand to data bounds
+        self.xlamRangeChanged.emit(min_val, max_val)
     
     @QtCore.pyqtSlot(bool)
     def _handle_crosshair_sync_toggle(self, checked: bool):
@@ -491,11 +564,74 @@ class PlotControlWidget(QtWidgets.QWidget):
     def _handle_avg_x_sync_toggle(self, checked: bool):
         """Slot to receive and handle the wavelength average sync toggle state."""
         self.sync_avg_x = checked
+        # When enabling sync, immediately broadcast current spectral avg positions from any window
+        if checked and hasattr(self, 'spectrum_image_widgets'):
+            # Find a source image widget that currently has spectral averaging lines
+            for src_idx, img_widget in enumerate(self.spectrum_image_widgets):
+                if hasattr(img_widget, 'spectral_manager') and img_widget.spectral_manager and img_widget.spectral_manager.has_lines():
+                    left_pos = img_widget.spectral_manager.line1.value()
+                    center_pos = img_widget.spectral_manager.center_line.value()
+                    right_pos = img_widget.spectral_manager.line2.value()
+                    # Push positions to all windows
+                    for dst_idx, dst_img in enumerate(self.spectrum_image_widgets):
+                        if dst_idx != src_idx:
+                            dst_img.sync_spectral_averaging_lines(left_pos, center_pos, right_pos, src_idx)
+                    break
 
     @QtCore.pyqtSlot(bool)
     def _handle_avg_y_sync_toggle(self, checked: bool):
         """Slot to receive and handle the spatial average sync toggle state."""
         self.sync_avg_y = checked
+        # When enabling sync, immediately broadcast current spatial avg positions from any window
+        if checked and hasattr(self, 'spectrum_image_widgets'):
+            for src_idx, img_widget in enumerate(self.spectrum_image_widgets):
+                if hasattr(img_widget, 'spatial_manager') and img_widget.spatial_manager and img_widget.spatial_manager.has_lines():
+                    lower_pos = img_widget.spatial_manager.line1.value()
+                    center_pos = img_widget.spatial_manager.center_line.value()
+                    upper_pos = img_widget.spatial_manager.line2.value()
+                    # Push positions to all image windows
+                    for dst_idx, dst_img in enumerate(self.spectrum_image_widgets):
+                        if dst_idx != src_idx:
+                            dst_img.sync_spatial_averaging_lines(lower_pos, center_pos, upper_pos, src_idx)
+                    break
+    
+    @QtCore.pyqtSlot(float, float, float, int)
+    def handle_spectral_avg_line_movement(self, left_pos: float, center_pos: float, right_pos: float, source_stokes_index: int):
+        """Handle spectral averaging line movement and synchronize across windows."""
+        if self.sync_avg_x:
+            for img_idx, img_widget in enumerate(self.spectrum_image_widgets):
+                if img_idx != source_stokes_index:
+                    img_widget.sync_spectral_averaging_lines(left_pos, center_pos, right_pos, source_stokes_index)
+            # Update spatial widgets for all states that currently have spectral regions
+            if hasattr(self, 'spatial_widgets'):
+                # Convert positions to wavelength indices based on each spatial widget's data
+                for sp_idx, sp_widget in enumerate(self.spatial_widgets):
+                    if sp_idx < len(self.spectrum_image_widgets):
+                        img_widget = self.spectrum_image_widgets[sp_idx]
+                        has_spectral = hasattr(img_widget, 'spectral_manager') and img_widget.spectral_manager and img_widget.spectral_manager.has_lines()
+                        if has_spectral:
+                            n_wl_pixel = sp_widget.full_data.shape[0]
+                            index_wl_l = np.clip(int(np.round(left_pos)), 0, n_wl_pixel - 1)
+                            index_wl_c = np.clip(int(np.round(center_pos)), 0, n_wl_pixel - 1)
+                            index_wl_h = np.clip(int(np.round(right_pos)), 0, n_wl_pixel - 1)
+                            sp_widget.update_spatial_data_wl_avg(index_wl_l, index_wl_c, index_wl_h)
+    
+    @QtCore.pyqtSlot(float, float, float, int)
+    def handle_spatial_avg_line_movement(self, lower_pos: float, center_pos: float, upper_pos: float, source_stokes_index: int):
+        """Handle spatial averaging line movement and synchronize across windows."""
+        if self.sync_avg_y:
+            for img_idx, img_widget in enumerate(self.spectrum_image_widgets):
+                if img_idx != source_stokes_index:
+                    img_widget.sync_spatial_averaging_lines(lower_pos, center_pos, upper_pos, source_stokes_index)
+            # Update spectra for all states that currently have spatial regions
+            if hasattr(self, 'spectra_widgets'):
+                for spec_idx, spec_widget in enumerate(self.spectra_widgets):
+                    # Only update spectra for states that have spatial averaging lines displayed
+                    if spec_idx < len(self.spectrum_image_widgets):
+                        img_widget = self.spectrum_image_widgets[spec_idx]
+                        has_spatial = hasattr(img_widget, 'spatial_manager') and img_widget.spatial_manager and img_widget.spatial_manager.has_lines()
+                        if has_spatial and spec_idx != source_stokes_index and hasattr(spec_widget, 'handle_spatial_avg_line_movement'):
+                            spec_widget.handle_spatial_avg_line_movement(lower_pos, center_pos, upper_pos, source_stokes_index)
     
     @QtCore.pyqtSlot(float, float, int)
     def handle_crosshair_movement(self, xpos: float, ypos: float, source_stokes_index: int):

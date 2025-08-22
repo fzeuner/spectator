@@ -25,6 +25,7 @@ from views import (
 from views.windows import (
     StokesSpectrumWindow, StokesSpectrumImageWindow, StokesSpatialWindow
 )
+from controllers.app_controller import AxisType, data_manager
 
 # --- Main Application Setup for 3D data ---
 
@@ -65,10 +66,34 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     def update_spectator_data(new_data: np.ndarray, new_state_names: List[str] = None):
         """Update the spectator with new data without recreating the entire interface."""
         print(f"Updating spectator with new data: {new_data.shape}")
+        # Reset previous scaling and apply fresh scaling to the new data
+        try:
+            data_manager.reset_data_scaling()
+            target_axes = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL]
+            scaled_data = data_manager.scaler.scale_data(new_data, target_axes, auto_scale=True)
+            scale_info = data_manager.get_current_scale_info()
+            # Log scaling similar to example flow
+            if scale_info.get('is_scaled'):
+                if scale_info.get('has_states_axis'):
+                    print("Per-state data scaling applied:")
+                    for state_idx, factor in scale_info['factors'].items():
+                        if factor != 1.0:
+                            label = scale_info['labels'][state_idx]
+                            state_name = (new_state_names[state_idx]
+                                          if new_state_names is not None and state_idx < len(new_state_names)
+                                          else f"State {state_idx}")
+                            print(f"  {state_name}: factor {factor:.2e} ({label})")
+                else:
+                    factor = scale_info['factors'].get('global', 1.0)
+                    label = scale_info['labels'].get('global', '')
+                    print(f"Data scaled by factor {factor:.2e} ({label})")
+        except Exception as e:
+            print(f"Warning: scaling during update failed: {e}")
+            scaled_data = new_data
         
-        # Update global data reference
+        # Update global data reference with SCALED data
         nonlocal data, STOKES_NAMES
-        data = new_data
+        data = scaled_data
         
         # Update state names if provided
         if new_state_names is not None:
@@ -82,7 +107,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         for i, name in enumerate(STOKES_NAMES):
             if i < len(spectra) and i < data.shape[0]:
                 # Update existing widgets with new full data
-                stokes_data_slice = data[i, :, :]  # Shape: (spectral, spatial)
+                stokes_data_slice = data[i, :, :]  # Shape: (spectral, spatial), already scaled
                 
                 # Update StokesSpectrumWindow - replace full_data and refresh current display
                 if i < len(spectra):
@@ -113,12 +138,18 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
                     image_spectra[i].n_spectral, image_spectra[i].n_x_pixel = stokes_data_slice.shape
                     image_spectra[i].spectral_pixels = np.arange(image_spectra[i].n_spectral)
                     image_spectra[i].spatial_pixels = np.arange(image_spectra[i].n_x_pixel)
+                    # Update averaging line manager limits to new data ranges
+                    if hasattr(image_spectra[i], 'spectral_manager'):
+                        image_spectra[i].spectral_manager.set_data_range(image_spectra[i].n_spectral)
+                    if hasattr(image_spectra[i], 'spatial_manager'):
+                        image_spectra[i].spatial_manager.set_data_range(image_spectra[i].n_x_pixel)
                     
                     # Clear any existing averaging regions for clean state
                     image_spectra[i].clear_averaging_regions()
                     
                     # Update the image display
                     # StokesSpectrumImageWindow already transposes internally for correct spectral axis orientation
+                    # Set scaled image; this will trigger histogram and scale label update via sigImageChanged
                     image_spectra[i].image_item.setImage(stokes_data_slice)
                     
                     # Update the image rectangle bounds to match new data dimensions
@@ -275,7 +306,11 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
     for i in range(len(image_spectra)):        
         image_spectra[i].crosshairMoved.connect(control_widget.handle_crosshair_movement)
+        
+        # Always forward avg movements so the local windows update regardless of sync state
         image_spectra[i].avgRegionChanged.connect(control_widget.handle_v_avg_line_movement)
+        if i < len(spectra):
+            image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
         
         # Connect spectral averaging control signal
         control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra[i].set_spectral_averaging_enabled)
@@ -290,11 +325,32 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         
         # Set control widget reference for button activation
         image_spectra[i].control_widget = control_widget.lines_content_widget
+        # Wire manager callbacks now that control_widget is available
+        if hasattr(image_spectra[i], 'spectral_manager'):
+            image_spectra[i].spectral_manager.on_region_created = lambda: getattr(control_widget.lines_content_widget, 'notify_spectral_region_added', lambda: None)()
+            def _on_spec_removed():
+                if hasattr(control_widget.lines_content_widget, 'deactivate_spectral_button'):
+                    control_widget.lines_content_widget.deactivate_spectral_button()
+                if hasattr(control_widget.lines_content_widget, 'notify_spectral_region_removed'):
+                    control_widget.lines_content_widget.notify_spectral_region_removed()
+            image_spectra[i].spectral_manager.on_region_removed = _on_spec_removed
+        if hasattr(image_spectra[i], 'spatial_manager'):
+            image_spectra[i].spatial_manager.on_region_created = lambda: getattr(control_widget.lines_content_widget, 'notify_spatial_region_added', lambda: None)()
+            def _on_spat_removed():
+                if hasattr(control_widget.lines_content_widget, 'deactivate_spatial_button'):
+                    control_widget.lines_content_widget.deactivate_spatial_button()
+                if hasattr(control_widget.lines_content_widget, 'notify_spatial_region_removed'):
+                    control_widget.lines_content_widget.notify_spatial_region_removed()
+            image_spectra[i].spatial_manager.on_region_removed = _on_spat_removed
         
-        # Connect spatial averaging signal to spectrum window instead of spatial window
+        # Connect averaging line synchronization signals (propagate to other windows when sync is enabled)
+        if hasattr(image_spectra[i], 'spectral_manager'):
+            image_spectra[i].spectral_manager.regionChanged.connect(control_widget.handle_spectral_avg_line_movement)
+        if hasattr(image_spectra[i], 'spatial_manager'):
+            image_spectra[i].spatial_manager.regionChanged.connect(control_widget.handle_spatial_avg_line_movement)
+        
+        # Also allow clearing spatial avg from spectrum window
         if i < len(spectra):
-            image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
-            # Connect spatial averaging removal to spectrum window
             control_widget.lines_content_widget.toggleAvgYRemove.connect(spectra[i].clear_averaging_regions)
         
         # Enhanced crosshair synchronization: connect spectrum image to spatial window
