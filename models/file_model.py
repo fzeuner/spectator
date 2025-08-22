@@ -32,9 +32,25 @@ class datReader:
         if self._processed:
             return
 
-        # Extract info section if present
+        # Extract info section if present (case/bytes-insensitive)
+        def _to_str(x):
+            if isinstance(x, bytes):
+                try:
+                    return x.decode('utf-8', errors='ignore')
+                except Exception:
+                    return str(x)
+            return str(x)
+
+        self._info = None
         try:
-            self._info = self.dat.get('info') if hasattr(self.dat, 'get') else self.dat['info']
+            for key in self.dat:
+                key_s = _to_str(key).strip()
+                if key_s.lower() == 'info':
+                    try:
+                        self._info = self.dat[key]
+                        break
+                    except Exception:
+                        pass
         except Exception:
             self._info = None
 
@@ -43,11 +59,13 @@ class datReader:
         try:
             # readsav result behaves like dict; iterate keys
             for key in self.dat:
-                if key == 'info':
+                key_s = _to_str(key).strip()
+                # Exclude info-key regardless of case/coding
+                if key_s.lower() == 'info':
                     continue
                 arr = self.dat[key]
                 if isinstance(arr, np.ndarray):
-                    candidates.append((key, arr))
+                    candidates.append((key_s, arr))
         except Exception:
             # If iteration fails, fall back to attributes access is not supported; leave empty
             candidates = []
@@ -124,3 +142,8 @@ class datReader:
         """Return list of 2D images for the selected states (majority shape)."""
         self._ensure_processed()
         return list(self._images_2d)
+
+    def getStateNames(self):
+        """Return the processed state names aligned with images (excludes 'info')."""
+        self._ensure_processed()
+        return list(self._state_names)

@@ -70,18 +70,13 @@ class FileLoadingController(QtCore.QObject):
             raw_data_array = np.stack(images_array, axis=0)
             # Raw data is (states, spatial, spectral)
             
-            # Extract state names from the raw data keys
-            raw_data = reader.getDat()
-            state_names = list(raw_data.keys()) if raw_data else None
+            # Extract processed state names (aligned with images, excludes 'info')
+            state_names = reader.getStateNames()
             # Store file info for later display
             try:
                 self.current_info = reader.getDatInfo()
             except Exception:
                 self.current_info = None
-            
-            # Filter out non-array keys (like 'info')
-            if state_names:
-                state_names = [name for name in state_names if isinstance(raw_data.get(name), np.ndarray) and raw_data[name].ndim >= 2]
             
             # Import here to avoid circular imports
             from .app_controller import data_manager

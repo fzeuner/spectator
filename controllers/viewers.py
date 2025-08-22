@@ -60,9 +60,121 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     # Connect file selection to loading
     file_widget.fileSelected.connect(file_loading_controller.load_file)
     
+    # Containers for viewer widgets and docks
+    spectra: List[Any] = []
+    image_spectra: List[Any] = []
+    spatial: List[Any] = []
+    docks: Dict[str, Dict[str, Dock]] = {"spectrum": {}, "spec_img": {}, "spatial": {}} # Store docks by type and name
+
+    # Helpers to build and teardown viewers so we can rebuild dynamically on state-count change
+    def _teardown_viewers():
+        # Remove docks from area and clear containers
+        try:
+            for dtype in list(docks.keys()):
+                for name, dock in list(docks[dtype].items()):
+                    try:
+                        area.removeDock(dock)
+                    except Exception:
+                        pass
+                docks[dtype].clear()
+            # Close widgets explicitly (let GC collect)
+            for w in spectra + image_spectra + spatial:
+                try:
+                    w.setParent(None)
+                    w.deleteLater()
+                except Exception:
+                    pass
+        finally:
+            spectra.clear()
+            image_spectra.clear()
+            spatial.clear()
+
+    def _build_viewers():
+        # Create Widgets and Docks based on current data and STOKES_NAMES
+        for i, name in enumerate(STOKES_NAMES):
+            base_name = name  # dock names
+            stokes_data_y_wl_x = data[i, :, :]  # (wl, x)
+
+            # Create Widgets for this Stokes parameter
+            initial_spec_img_data = data[i, :, :]
+
+            win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
+            win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
+            win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
+
+            spectra.append(win_spectrum)
+            image_spectra.append(win_image_spectrum)
+            spatial.append(win_spatial)
+
+            # Create Docks
+            spectrum_dock = Dock(f"{base_name} spectrum", size=(350, 150))
+            spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(350, 150))
+            spatial_dock = Dock(f"{base_name} spatial", size=(250, 150))
+
+            # Add Widgets to Docks
+            spectrum_dock.addWidget(win_spectrum)
+            spectrum_image_dock.addWidget(win_image_spectrum)
+            spatial_dock.addWidget(win_spatial)
+
+            # Store Docks
+            docks["spectrum"][base_name] = spectrum_dock
+            docks["spec_img"][base_name] = spectrum_image_dock
+            docks["spatial"][base_name] = spatial_dock
+
+        # Arrange docks in DockArea
+        for i, name in enumerate(STOKES_NAMES):
+            base_name = name.split('/')[0]
+            if name == STOKES_NAMES[0]:
+                area.addDock(docks["spec_img"][base_name], 'left')
+            else:
+                area.addDock(docks["spec_img"][base_name], 'bottom', docks["spec_img"][STOKES_NAMES[i-1].split('/')[0]])
+        for i, name in enumerate(STOKES_NAMES):
+            base_name = name.split('/')[0]
+            area.addDock(docks["spectrum"][base_name], 'right', docks["spec_img"][base_name])
+            area.addDock(docks["spatial"][base_name], 'right', docks["spectrum"][base_name])
+
+        # Initialize control widget connections for new viewers
+        control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial)
+
+        # Connect signals in a loop
+        for i in range(len(image_spectra)):
+            image_spectra[i].crosshairMoved.connect(control_widget.handle_crosshair_movement)
+            image_spectra[i].avgRegionChanged.connect(control_widget.handle_v_avg_line_movement)
+            if i < len(spectra):
+                image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
+            control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra[i].set_spectral_averaging_enabled)
+            control_widget.lines_content_widget.toggleAvgXRemove.connect(image_spectra[i].remove_spectral_averaging)
+            control_widget.lines_content_widget.toggleAvgYRemove.connect(image_spectra[i].remove_spatial_averaging)
+            image_spectra[i].control_widget = control_widget.lines_content_widget
+            if hasattr(image_spectra[i], 'spectral_manager'):
+                image_spectra[i].spectral_manager.on_region_created = lambda: getattr(control_widget.lines_content_widget, 'notify_spectral_region_added', lambda: None)()
+                def _on_spec_removed():
+                    if hasattr(control_widget.lines_content_widget, 'deactivate_spectral_button'):
+                        control_widget.lines_content_widget.deactivate_spectral_button()
+                    if hasattr(control_widget.lines_content_widget, 'notify_spectral_region_removed'):
+                        control_widget.lines_content_widget.notify_spectral_region_removed()
+                image_spectra[i].spectral_manager.on_region_removed = _on_spec_removed
+            if hasattr(image_spectra[i], 'spatial_manager'):
+                image_spectra[i].spatial_manager.on_region_created = lambda: getattr(control_widget.lines_content_widget, 'notify_spatial_region_added', lambda: None)()
+                def _on_spat_removed():
+                    if hasattr(control_widget.lines_content_widget, 'deactivate_spatial_button'):
+                        control_widget.lines_content_widget.deactivate_spatial_button()
+                    if hasattr(control_widget.lines_content_widget, 'notify_spatial_region_removed'):
+                        control_widget.lines_content_widget.notify_spatial_region_removed()
+                image_spectra[i].spatial_manager.on_region_removed = _on_spat_removed
+            if i < len(spatial):
+                image_spectra[i].crosshairMoved.connect(spatial[i].update_from_spectrum_crosshair)
+                control_widget.lines_content_widget.toggleAvgYRemove.connect(spatial[i].clear_averaging_regions)
+        for spectrum_widget in spectra:
+            control_widget.xlamRangeChanged.connect(spectrum_widget.update_spectral_range)
+            control_widget.resetXlamRangeRequested.connect(spectrum_widget.reset_spectral_range)
+        for image_spectrum_widget in image_spectra:
+            control_widget.xlamRangeChanged.connect(image_spectrum_widget.update_spectral_range)
+            control_widget.resetXlamRangeRequested.connect(image_spectrum_widget.reset_spectral_range)
+
     # Create data update function
     def update_spectator_data(new_data: np.ndarray, new_state_names: List[str] = None):
-        """Update the spectator with new data without recreating the entire interface."""
+        """Update the spectator with new data, rebuilding viewers if state count changes."""
         # Reset previous scaling and apply fresh scaling to the new data
         try:
             data_manager.reset_data_scaling()
@@ -91,14 +203,25 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         # Update global data reference with SCALED data
         nonlocal data, STOKES_NAMES
         data = scaled_data
-        
-        # Update state names if provided
+
+        # Determine new state names and whether we need to rebuild
+        incoming_state_names = None
         if new_state_names is not None:
-            STOKES_NAMES = new_state_names
-        else:
-            # Generate default names if we have different number of states
-            if len(STOKES_NAMES) != data.shape[0]:
-                STOKES_NAMES = [str(i+1) for i in range(data.shape[0])]
+            incoming_state_names = new_state_names
+        elif len(STOKES_NAMES) != data.shape[0]:
+            incoming_state_names = [str(i+1) for i in range(data.shape[0])]
+
+        # If state count changed, teardown and rebuild viewers
+        if data.shape[0] != len(spectra):
+            # Set STOKES_NAMES prior to build
+            STOKES_NAMES = incoming_state_names if incoming_state_names is not None else STOKES_NAMES
+            _teardown_viewers()
+            _build_viewers()
+            return
+
+        # No rebuild needed: just refresh existing widgets with new data
+        if incoming_state_names is not None:
+            STOKES_NAMES = incoming_state_names
         
         # Update existing widgets with new data
         for i, name in enumerate(STOKES_NAMES):
@@ -234,70 +357,14 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         except Exception:
             pass
     file_loading_controller.loadingError.connect(_on_loading_error)
-    spectra: List[Any] = []
-    image_spectra: List[Any] = []
-    spatial: List[Any] = []
-    docks: Dict[str, Dict[str, Dock]] = {"spectrum": {}, "spec_img": {}, "spatial": {}} # Store docks by type and name
-
-    
-
-     # --- Create Widgets and Docks in a Loop ---
-    for i, name in enumerate(STOKES_NAMES):
-         base_name = name # dock names
-         stokes_data_y_wl_x = data[i, :, :] # Shape ( wl, x)
-
-         # Create Widgets for this Stokes parameter
-         initial_spec_img_data = data[i, :, :] 
-
-         win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
-         win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
-         win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
-
-         # Append to lists
-         spectra.append(win_spectrum)
-         image_spectra.append(win_image_spectrum)
-         spatial.append(win_spatial)
-         
-         # Create Docks
-         spectrum_dock = Dock(f"{base_name} spectrum", size=(350, 150))
-         spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(350, 150))
-         spatial_dock = Dock(f"{base_name} spatial", size=(250, 150))
-
-         # Add Widgets to Docks
-         spectrum_dock.addWidget(win_spectrum)
-         spectrum_image_dock.addWidget(win_image_spectrum)
-         spatial_dock.addWidget(win_spatial)
-
-         # Store Docks
-         docks["spectrum"][base_name] = spectrum_dock
-         docks["spec_img"][base_name] = spectrum_image_dock
-         docks["spatial"][base_name] = spatial_dock
-
-    # Update control widget with the created image and spectrum widgets
-    control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial) # Now initialize UI for limits
-       
     # --- Create Control and Data Docks ---
     control_dock = Dock("Control", size=(70,1000))
     files_dock = Dock("Files", size=(70,1000))
     info_win = None   # separate window for Info
     info_text = None  # text widget inside the Info window
     
-    # --- Arrange Docks in the DockArea ---
-    
-    for i, name in enumerate(STOKES_NAMES):
-        base_name = name.split('/')[0]
-        if name == STOKES_NAMES[0]: # first one always on the left
-            area.addDock(docks["spec_img"][base_name], 'left')
-        else:
-            area.addDock(docks["spec_img"][base_name], 'bottom', docks["spec_img"][STOKES_NAMES[i-1].split('/')[0]])
-    
-    # Middle Column: Spectrum Images and Spectra
- 
-    for i, name in enumerate(STOKES_NAMES):
-         base_name = name.split('/')[0]
-         # Add spectrum and spatial
-         area.addDock(docks["spectrum"][base_name], 'right', docks["spec_img"][base_name])
-         area.addDock(docks["spatial"][base_name], 'right', docks["spectrum"][base_name])
+    # Initial build of viewers and arrangement
+    _build_viewers()
 
  
     area.addDock(files_dock, 'right')
@@ -386,75 +453,13 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
     file_widget.infoRequested.connect(_show_info_window)
     
-    # --- Connect Signals in a Loop ---
-
-    for i in range(len(image_spectra)):        
-        image_spectra[i].crosshairMoved.connect(control_widget.handle_crosshair_movement)
-        
-        # Always forward avg movements so the local windows update regardless of sync state
-        image_spectra[i].avgRegionChanged.connect(control_widget.handle_v_avg_line_movement)
-        if i < len(spectra):
-            image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
-        
-        # Connect spectral averaging control signal
-        control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra[i].set_spectral_averaging_enabled)
-        
-        # Connect averaging removal signals
-        control_widget.lines_content_widget.toggleAvgXRemove.connect(image_spectra[i].remove_spectral_averaging)
-        control_widget.lines_content_widget.toggleAvgYRemove.connect(image_spectra[i].remove_spatial_averaging)
-        
-        # Connect default averaging creation signals
-        control_widget.lines_content_widget.createDefaultSpectralAveraging.connect(image_spectra[i].create_default_spectral_averaging)
-        control_widget.lines_content_widget.createDefaultSpatialAveraging.connect(image_spectra[i].create_default_spatial_averaging)
-        
-        # Set control widget reference for button activation
-        image_spectra[i].control_widget = control_widget.lines_content_widget
-        # Wire manager callbacks now that control_widget is available
-        if hasattr(image_spectra[i], 'spectral_manager'):
-            image_spectra[i].spectral_manager.on_region_created = lambda: getattr(control_widget.lines_content_widget, 'notify_spectral_region_added', lambda: None)()
-            def _on_spec_removed():
-                if hasattr(control_widget.lines_content_widget, 'deactivate_spectral_button'):
-                    control_widget.lines_content_widget.deactivate_spectral_button()
-                if hasattr(control_widget.lines_content_widget, 'notify_spectral_region_removed'):
-                    control_widget.lines_content_widget.notify_spectral_region_removed()
-            image_spectra[i].spectral_manager.on_region_removed = _on_spec_removed
-        if hasattr(image_spectra[i], 'spatial_manager'):
-            image_spectra[i].spatial_manager.on_region_created = lambda: getattr(control_widget.lines_content_widget, 'notify_spatial_region_added', lambda: None)()
-            def _on_spat_removed():
-                if hasattr(control_widget.lines_content_widget, 'deactivate_spatial_button'):
-                    control_widget.lines_content_widget.deactivate_spatial_button()
-                if hasattr(control_widget.lines_content_widget, 'notify_spatial_region_removed'):
-                    control_widget.lines_content_widget.notify_spatial_region_removed()
-            image_spectra[i].spatial_manager.on_region_removed = _on_spat_removed
-        
-        # Connect averaging line synchronization signals (propagate to other windows when sync is enabled)
-        if hasattr(image_spectra[i], 'spectral_manager'):
-            image_spectra[i].spectral_manager.regionChanged.connect(control_widget.handle_spectral_avg_line_movement)
-        if hasattr(image_spectra[i], 'spatial_manager'):
-            image_spectra[i].spatial_manager.regionChanged.connect(control_widget.handle_spatial_avg_line_movement)
-        
-        # Also allow clearing spatial avg from spectrum window
-        if i < len(spectra):
-            control_widget.lines_content_widget.toggleAvgYRemove.connect(spectra[i].clear_averaging_regions)
-        
-        # Enhanced crosshair synchronization: connect spectrum image to spatial window
-        if i < len(spatial):
-            # Connect crosshair movement to update spatial window
-            image_spectra[i].crosshairMoved.connect(spatial[i].update_from_spectrum_crosshair)
-            # Connect spectral averaging removal to spatial window
-            control_widget.lines_content_widget.toggleAvgXRemove.connect(spatial[i].clear_averaging_regions)
-            # Note: Removed feedback connection from spatial horizontal line to spectrum image crosshair
-            # to prevent unwanted feedback when moving the spatial window horizontal line
-    
-    # Connect the xlamRangeChanged signal 
-
-    for spectrum_widget in spectra:
-        control_widget.xlamRangeChanged.connect(spectrum_widget.update_spectral_range)
-        control_widget.resetXlamRangeRequested.connect(spectrum_widget.reset_spectral_range)
-        
-    for image_spectrum_widget in image_spectra:
-        control_widget.xlamRangeChanged.connect(image_spectrum_widget.update_spectral_range)
-        control_widget.resetXlamRangeRequested.connect(image_spectrum_widget.reset_spectral_range)
+    # Build wires for creating default averaging from control (these are static and will work with rebuilt viewers too)
+    control_widget.lines_content_widget.createDefaultSpectralAveraging.connect(
+        lambda: [w.create_default_spectral_averaging() for w in image_spectra]
+    )
+    control_widget.lines_content_widget.createDefaultSpatialAveraging.connect(
+        lambda: [w.create_default_spatial_averaging() for w in image_spectra]
+    )
 
     # --- Show Window and Run App ---
     win.show()
