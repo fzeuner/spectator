@@ -31,7 +31,7 @@ if __name__ == '__main__':
         exit(1)
     
     # Generate example data
-    print("\n1. Generating test data...")
+    print("\nGenerating test data...")
     data_3d = generate_example_data()  
     print(f"   3D data shape: {data_3d.shape}")
     
