@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.file_model import datReader
 from controllers.app_controller import data_manager
+from utils.config import load_config, ensure_example_config
 
 
 class FileLoadingController(QtCore.QObject):
@@ -33,6 +34,9 @@ class FileLoadingController(QtCore.QObject):
         super().__init__(parent)
         self.current_data = None
         self.current_file_path = None
+        # Load user configuration (non-fatal if missing)
+        ensure_example_config()
+        self._config = load_config()
         
     def load_file(self, file_path: str):
         """
@@ -42,10 +46,9 @@ class FileLoadingController(QtCore.QObject):
             file_path: Path to the .dat file to load
         """
         try:
-            print(f"Loading file: {file_path}")
             
             # Use datReader to load the file
-            reader = datReader(path=file_path, python_dict=True, verbose=True)
+            reader = datReader(path=file_path, python_dict=True, verbose=False)
             
             # Get the images array
             images_array = reader.getDatImagesArray()
@@ -55,12 +58,16 @@ class FileLoadingController(QtCore.QObject):
                 raise ValueError("Empty images array")
             
             raw_data_array = np.stack(images_array, axis=0)
-            print(f"Raw data shape: {raw_data_array.shape}")
-            print(f"Raw data axis order: (states, spatial, spectral)")
+            # Raw data is (states, spatial, spectral)
             
             # Extract state names from the raw data keys
             raw_data = reader.getDat()
             state_names = list(raw_data.keys()) if raw_data else None
+            # Store file info for later display
+            try:
+                self.current_info = reader.getDatInfo()
+            except Exception:
+                self.current_info = None
             
             # Filter out non-array keys (like 'info')
             if state_names:
@@ -83,7 +90,7 @@ class FileLoadingController(QtCore.QObject):
                 target_axes=target_axes
             )
             
-            print(f"Successfully loaded and processed data with shape: {processed_data.shape}")
+            # Data successfully loaded and processed
             
             # Store current data
             self.current_data = processed_data
@@ -94,7 +101,6 @@ class FileLoadingController(QtCore.QObject):
                 
         except Exception as e:
             error_msg = f"Error loading file {file_path}: {str(e)}"
-            print(error_msg)
             self.loadingError.emit(error_msg)
     
     def _process_images_for_viewer(self, images_array: List[np.ndarray]) -> np.ndarray:
@@ -180,14 +186,17 @@ class FileLoadingController(QtCore.QObject):
                 state_names=state_names
             )
             
-            print(f"Data displayed successfully with title: {title}")
             return viewer
             
         except Exception as e:
             error_msg = f"Error displaying data: {str(e)}"
-            print(error_msg)
             self.loadingError.emit(error_msg)
-            return None
+        
+        return None
+
+    def get_current_info(self):
+        """Return info section from last loaded file, if available."""
+        return self.current_info
 
 
 class FileListingController(QtWidgets.QWidget):
@@ -195,6 +204,8 @@ class FileListingController(QtWidgets.QWidget):
     
     # Signal emitted when a file is selected for loading
     fileSelected = QtCore.pyqtSignal(str)  # file_path
+    # Signal emitted when user requests an Info dock
+    infoRequested = QtCore.pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -202,26 +213,51 @@ class FileListingController(QtWidgets.QWidget):
         # Initialize instance variables
         self.directory = ['']
         self.selected_directories = ['']
-        self.must_be_in_directory = "reduced"
-        self.excluded_file_types = ["cal", "dark", "ff"]
         self.file_paths = []  # Store full file paths
+        self._dir_paths = []  # When listing directories, store abs paths
+        self._listing_mode = 'files'  # 'files' or 'dirs'
+        # Load config and precompute start directory
+        ensure_example_config()
+        self._config = load_config()
+        # Load from config (with defaults applied by loader)
+        self.must_be_in_directory = self._config.get("must_be_in_directory", "reduced")
+        self.excluded_file_types = list(self._config.get("excluded_file_terms", ["cal", "dark", "ff"]))
+        self._start_directory = self._compute_start_directory()
         
         # Setup UI
         self._setup_ui()
         self._connect_signals()
+        # Auto-populate listing if a valid start directory is configured
+        try:
+            if self._start_directory and os.path.isdir(self._start_directory):
+                if self._config.get('auto_navigate_recent', False):
+                    # Auto-list files directly
+                    self._populate_from_paths([self._start_directory])
+                    self.directory = [self._start_directory]
+                else:
+                    # List subdirectories for user to choose
+                    self._populate_directories(self._start_directory)
+                    self.directory = [self._start_directory]
+        except Exception:
+            pass
     
     def _setup_ui(self):
         """Setup the user interface."""
         # Create widgets
+        self.info_button = QtWidgets.QPushButton('List info')
+        self.info_button.clicked.connect(self.infoRequested.emit)
         self.button = QtWidgets.QPushButton('Choose Directory')
         self.button.clicked.connect(self.handleChooseDirectories)
+        self.refresh_button = QtWidgets.QPushButton('Refresh')
+        self.refresh_button.clicked.connect(self.refresh_listing)
         self.listWidget = QtWidgets.QListWidget()
         self.directorylabel = QtWidgets.QLabel()
         self.fileinfolabel1 = QtWidgets.QLabel()
         self.fileinfolabel2 = QtWidgets.QLabel()
         
         # Set initial text
-        self.directorylabel.setText('Current directory: ' + self.directory[0])
+        initial_dir = self._start_directory or self.directory[0]
+        self.directorylabel.setText('Current directory: ' + initial_dir)
         self.directorylabel.setWordWrap(True)
         self.fileinfolabel1.setText('Files sub-directory: ' + self.must_be_in_directory)
         
@@ -231,7 +267,14 @@ class FileListingController(QtWidgets.QWidget):
         # Create layout
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.listWidget)
-        layout.addWidget(self.button)
+        # Place 'List info' button above the other buttons
+        layout.addWidget(self.info_button)
+        # Buttons row (Choose + Refresh)
+        buttons_row = QtWidgets.QHBoxLayout()
+        buttons_row.addWidget(self.button)
+        buttons_row.addWidget(self.refresh_button)
+        buttons_row.addStretch(1)
+        layout.addLayout(buttons_row)
         layout.addWidget(self.directorylabel)
         layout.addWidget(self.fileinfolabel1)
         layout.addWidget(self.fileinfolabel2)
@@ -252,16 +295,21 @@ class FileListingController(QtWidgets.QWidget):
             
             item_number = int(item_text.split('.')[0]) - 1
             
-            if 0 <= item_number < len(self.file_paths):
-                file_path = self.file_paths[item_number]
-                print(f"Selected file: {file_path}")
-                # Emit signal with the selected file path
-                self.fileSelected.emit(file_path)
-            else:
-                print(f"Invalid file selection: index {item_number} out of range")
-                
+            if self._listing_mode == 'files':
+                if 0 <= item_number < len(self.file_paths):
+                    file_path = self.file_paths[item_number]
+                    # Emit signal with the selected file path
+                    self.fileSelected.emit(file_path)
+            elif self._listing_mode == 'dirs':
+                if 0 <= item_number < len(self._dir_paths):
+                    chosen_dir = self._dir_paths[item_number]
+                    # Populate files from this directory
+                    self._populate_from_paths([chosen_dir])
+                    self._listing_mode = 'files'
+                    self.directory = [chosen_dir]
+        
         except (ValueError, IndexError) as e:
-            print(f"Error processing file selection: {e}")
+            pass
 
     def handleChooseDirectories(self):
         """Handle directory selection and populate file list."""
@@ -269,56 +317,184 @@ class FileListingController(QtWidgets.QWidget):
         dialog.setWindowTitle('Choose a directory')
         dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
         dialog.setFileMode(QtWidgets.QFileDialog.DirectoryOnly)
+        # Set starting directory from config
+        if self._start_directory and os.path.isdir(self._start_directory):
+            try:
+                dialog.setDirectory(self._start_directory)
+            except Exception:
+                pass
         
         for view in dialog.findChildren((QtWidgets.QListView, QtWidgets.QTreeView)):
             if isinstance(view.model(), QtWidgets.QFileSystemModel):
                 view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            selected = dialog.selectedFiles()
+            # If user chose the base (parent) directory, do NOT list files; show its subdirectories
+            base = selected[0] if selected else self.directory[0]
+            if self._start_directory and os.path.abspath(base) == os.path.abspath(self._start_directory):
+                self._populate_directories(base)
+            else:
+                # Otherwise, attempt to list files under the chosen directory; if none, show its subdirectories
+                self._populate_from_paths(selected)
+            self.directory = selected
+        
+        dialog.deleteLater()
+
+    def _populate_from_paths(self, selected_paths: list[str]):
+        """Populate the list widget and labels from selected directories (no dialog)."""
+        try:
             self.listWidget.clear()
             self.file_paths.clear()
-            
+            self._listing_mode = 'files'
+
+            # Never list files directly for the configured base (parent) directory; show its subdirectories instead
+            try:
+                if selected_paths and self._start_directory and os.path.abspath(selected_paths[0]) == os.path.abspath(self._start_directory):
+                    self._populate_directories(selected_paths[0])
+                    return
+            except Exception:
+                pass
+
             list_files, list_dirs = self.all_dat_files(
-                dialog.selectedFiles(),
+                selected_paths,
                 excludes=self.excluded_file_types,
                 in_dir=self.must_be_in_directory
             )
-            
+
             if list_files:
-                # Files found - display them and store full paths
                 show_file_list = []
                 for n, (file, directory) in enumerate(zip(list_files, list_dirs)):
-                    # Store full file path
                     full_path = os.path.join(directory, file)
                     self.file_paths.append(full_path)
-                    
-                    # Create display name with number
                     show_file_list.append(str(n+1) + '. ' + file)
-                
                 self.listWidget.addItems(show_file_list)
-                
-                # Update status
-                self.directorylabel.setText(f'Current directory: {self.directory[0]} ({len(list_files)} files found)')
+
+                chosen_dir = selected_paths[0] if selected_paths else self.directory[0]
+                self.directorylabel.setText(f'Current directory: {chosen_dir}')
             else:
-                # No files found - provide feedback
-                self.listWidget.addItem("No .dat files found in 'reduced' subdirectories")
-                self.listWidget.addItem("")
-                self.listWidget.addItem("Requirements:")
-                self.listWidget.addItem("• Files must be in subdirectories containing 'reduced'")
-                self.listWidget.addItem("• Files must have .dat extension")
-                self.listWidget.addItem(f"• Files must not contain: {', '.join(self.excluded_file_types)}")
-                
+                # No files found: show directories for user to drill down
+                base = selected_paths[0] if selected_paths else self.directory[0]
+                self._populate_directories(base)
+                return
+
+            # Track the directories used for listing
+            self.selected_directories = list_dirs
+        except Exception:
+            pass
+
+    def refresh_listing(self):
+        """Refresh current listing according to current mode and directory."""
+        try:
+            current_base = self.directory[0] if self.directory else (self._start_directory or '')
+            if self._listing_mode == 'files':
+                # Re-list files for the current directory
+                self._populate_from_paths([current_base])
+            else:
+                # Re-list subdirectories for the current base
+                self._populate_directories(current_base)
+        except Exception:
+            pass
+
+    def show_info(self):
+        """Show a small dialog with listing rules and current context."""
+        try:
+            base = self.directory[0] if self.directory else (self._start_directory or '')
+            mode = self._listing_mode
+            must_dir = self.must_be_in_directory
+            excludes = ', '.join(self.excluded_file_types)
+            auto_recent = bool(self._config.get('auto_navigate_recent', False))
+            msg = (
+                f"Current directory: {base}\n"
+                f"Mode: {mode}\n\n"
+                f"Listing rules:\n"
+                f"- Only .dat files under subfolders containing '{must_dir}' are shown.\n"
+                f"- Excluded filename terms: {excludes or '(none)'}\n"
+                f"- Auto-navigate recent: {'on' if auto_recent else 'off'}\n\n"
+                f"Tips:\n"
+                f"- Click a directory to drill down.\n"
+                f"- Use Refresh to re-scan for newly created files.\n"
+            )
+            QtWidgets.QMessageBox.information(self, 'Files listing info', msg)
+        except Exception:
+            pass
+
+    def _populate_directories(self, base_dir: str):
+        """Populate the list with immediate subdirectories of base_dir (no filtering)."""
+        try:
+            self.listWidget.clear()
+            self.file_paths.clear()
+            self._dir_paths.clear()
+            self._listing_mode = 'dirs'
+
+            if not base_dir or not os.path.isdir(base_dir):
+                self.listWidget.addItem("Base directory does not exist.")
                 # Disable selection for info items
                 for i in range(self.listWidget.count()):
                     item = self.listWidget.item(i)
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
-                
-                self.directorylabel.setText(f'Current directory: {self.directory[0]} (no files found)')
-            
-            self.directory = dialog.selectedFiles()
-            self.selected_directories = list_dirs
-        
-        dialog.deleteLater()
+                return
+
+            # List immediate subdirectories
+            entries = []
+            try:
+                for entry in sorted(os.listdir(base_dir)):
+                    full = os.path.join(base_dir, entry)
+                    if os.path.isdir(full):
+                        entries.append((entry, full))
+            except Exception:
+                entries = []
+
+            if entries:
+                show_dirs = []
+                for n, (name, full) in enumerate(entries):
+                    self._dir_paths.append(full)
+                    show_dirs.append(f"{n+1}. {name}")
+                self.listWidget.addItems(show_dirs)
+                self.directorylabel.setText(f"Current directory: {base_dir}")
+            else:
+                self.listWidget.addItem("No subdirectories found.")
+                for i in range(self.listWidget.count()):
+                    item = self.listWidget.item(i)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
+                self.directorylabel.setText(f"Current directory: {base_dir}")
+        except Exception:
+            # Non-fatal UI population errors should not crash the app
+            pass
+
+    def _compute_start_directory(self) -> str:
+        """Compute the initial directory for the file chooser based on config.
+
+        If auto_navigate_recent is True, return the most recent YYMMDD subdirectory
+        within default_data_base_dir. Otherwise return default_data_base_dir.
+        """
+        import re
+        base_dir = self._config.get('default_data_base_dir')
+        if not base_dir:
+            return ''
+        base_dir = os.path.abspath(os.path.expanduser(base_dir))
+        if not os.path.isdir(base_dir):
+            return base_dir
+
+        if not self._config.get('auto_navigate_recent', False):
+            return base_dir
+
+        # Find subdirectories with YYMMDD name format and pick the latest
+        yymmdd_re = re.compile(r'^[0-9]{6}$')
+        candidates = []
+        try:
+            for entry in os.listdir(base_dir):
+                full = os.path.join(base_dir, entry)
+                if os.path.isdir(full) and yymmdd_re.match(entry):
+                    candidates.append(entry)
+        except Exception:
+            return base_dir
+
+        if not candidates:
+            return base_dir
+
+        most_recent = max(candidates)
+        return os.path.join(base_dir, most_recent)
 
         
     def all_dat_files(self, directories, excludes=None, in_dir=None):
@@ -328,10 +504,7 @@ class FileListingController(QtWidgets.QWidget):
         if in_dir is None:
             in_dir = self.must_be_in_directory
             
-        print(f"\n=== DEBUG: Searching for files ===")
-        print(f"Base directory: {directories[0]}")
-        print(f"Must be in directory containing: '{in_dir}'")
-        print(f"Excluded file types: {excludes}")
+        # Quiet operation: no debug printing
         
         list_of_files = []
         list_of_directories = []
@@ -340,41 +513,26 @@ class FileListingController(QtWidgets.QWidget):
         for root, dirs, files in os.walk(directories[0]):       
             dat_files_in_dir = [f for f in files if f.endswith('.dat')]
             if dat_files_in_dir:
-                print(f"\nDirectory: {root}")
-                print(f"  .dat files found: {len(dat_files_in_dir)}")
                 total_sav_files += len(dat_files_in_dir)
                 
                 for file in dat_files_in_dir:
-                    print(f"    Checking: {file}")
-                    
                     # Check directory requirement
                     if in_dir in root:
-                        print(f"      ✓ Directory contains '{in_dir}'")
                         
                         # Check exclusions
                         use = True
                         for exclude in excludes:
                             if exclude in file:
-                                print(f"      ✗ File contains excluded term '{exclude}'")
                                 use = False
                                 break
                         
                         if use:
-                            print(f"      ✓ File passes all filters")
                             list_of_files.append(file)
                             list_of_directories.append(root)
                         else:
-                            print(f"      ✗ File excluded")
+                            pass
                     else:
-                        print(f"      ✗ Directory does not contain '{in_dir}'")
-        
-        print(f"\n=== SEARCH SUMMARY ===")
-        print(f"Total .dat files found: {total_sav_files}")
-        print(f"Files passing filters: {len(list_of_files)}")
-        if list_of_files:
-            print("Filtered files:")
-            for i, (file, dir_path) in enumerate(zip(list_of_files, list_of_directories)):
-                print(f"  {i+1}. {file} (in {dir_path})")
-        print("=" * 50)
-                 
+                        pass
+        # No summary prints
+                
         return list_of_files, list_of_directories     

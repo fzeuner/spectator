@@ -11,6 +11,7 @@ A modern Python-based data visualization application with advanced features for 
   - [Quick Start](#quick-start)
   - [Data Loading](#data-loading)
   - [Interactive Features](#interactive-features)
+- [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Development](#development)
   - [Project Structure](#project-structure)
@@ -87,6 +88,12 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
    cp utils/Dock.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/
    ```
 
+5. **(Optional) Configure default data path:**
+   - Edit `config/file_config.json` and set `"default_data_base_dir"` to your data root.
+   - You can also set `"auto_navigate_recent": true` to auto-open the latest `YYMMDD` subdirectory.
+   - Alternatively, create/update your user-local config at `~/.config/spectator/file_config.json` — this takes precedence over the repo-local file.
+   - See the [Configuration](#configuration) section for details and other options.
+
 ## Usage
 
 ### Quick Start
@@ -110,6 +117,7 @@ import numpy as np
 data = np.load('your_data.npy')
 
 # Display with automatic axis detection
+# data.shape[0] should be 4, because 4 state names are given
 viewer = display_data(data, 'states', 'spectral', 'spatial', 
                      title='My Data', 
                      state_names=['I', 'Q', 'U', 'V'])
@@ -118,6 +126,52 @@ viewer = display_data(data, 'states', 'spectral', 'spatial',
 **ZIMPOL File Browser (if available):**
 - Use the file listing controller to browse .dat files
 - Automatic filtering for science data files
+
+## Configuration
+
+Spectator reads configuration from a repo-local JSON file with sensible defaults.
+
+- If a user-local config exists at `~/.config/spectator/file_config.json`, it is used.
+- Otherwise, the repo-local `config/file_config.json` is used.
+
+Config keys:
+
+- `default_data_base_dir`: Absolute path to your base data directory (e.g., `/home/user/data/pdata`).
+- `auto_navigate_recent`: If `true`, the file chooser auto-opens the most recent `YYMMDD` subdirectory.
+- `must_be_in_directory`: Substring that must be present in subdirectory paths for `.dat` files to be listed (default: `"reduced"`).
+- `excluded_file_terms`: Substrings; files containing any are excluded (e.g., `["cal", "dark", "ff"]`).
+
+Example `config/file_config.json`:
+
+```json
+{
+  "default_data_base_dir": "/home/you/data/pdata",
+  "auto_navigate_recent": true,
+  "must_be_in_directory": "reduced",
+  "excluded_file_terms": ["cal", "dark", "ff"]
+}
+```
+
+Minimal user-local override example (`~/.config/spectator/file_config.json`):
+
+```json
+{
+  "default_data_base_dir": "/path/to/your/data"
+}
+```
+
+Changing the user-local path (optional):
+
+- Default user-local location is defined in `utils/config.py` as `USER_CONFIG_DIR`/`USER_CONFIG_PATH`.
+- To customize, edit these constants in `utils/config.py`:
+
+For example, to store the user config under `~/.spectator/` instead:
+
+```python
+# utils/config.py
+USER_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".spectator")
+USER_CONFIG_PATH = os.path.join(USER_CONFIG_DIR, "file_config.json")
+```
 
 ### Interactive Features
 
@@ -164,6 +218,8 @@ Spectator follows a **Model-View-Controller (MVC)** architecture pattern for mai
 ```text
 spectator/
 ├── README.md
+├── config/                  # Configuration files
+│   └── file_config.json     # Repo-local config (overrides defaults)
 ├── controllers/              # Application logic
 │   ├── app_controller.py     # Main entry points and data display
 │   ├── file_controllers.py   # File listing/selection utilities

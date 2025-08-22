@@ -1,4 +1,5 @@
 import numpy as np
+from pprint import pformat
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 import qdarkstyle
@@ -9,6 +10,7 @@ from functools import partial
 from .file_controllers import FileLoadingController
 from .file_controllers import FileListingController
 from utils.colors import getWidgetColors
+from utils.info_formatter import format_info_to_html
 
 # local imports
 import sys
@@ -227,8 +229,6 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
                     if i < len(dock_keys_spatial):
                         docks["spatial"][dock_keys_spatial[i]].setTitle(f"{name} spatial")
         
-        print("Spectator data update completed")
-    
     # Connect file loading controller to data update function
     file_loading_controller.dataLoaded.connect(update_spectator_data)
     spectra: List[SpectrumPlotWidget] = []
@@ -276,6 +276,8 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     # --- Create Control and Data Docks ---
     control_dock = Dock("Control", size=(70,1000))
     files_dock = Dock("Files", size=(70,1000))
+    info_win = None   # separate window for Info
+    info_text = None  # text widget inside the Info window
     
     # --- Arrange Docks in the DockArea ---
     
@@ -301,6 +303,85 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     # Control widget
     control_dock.addWidget(control_widget)
     files_dock.addWidget(file_widget)
+
+    # --- Independent Info window wiring ---
+    def _destroy_info_window():
+        nonlocal info_win, info_text
+        try:
+            if info_win is not None:
+                try:
+                    info_win.close()
+                except Exception:
+                    pass
+                info_win = None
+                info_text = None
+        except Exception:
+            pass
+
+    def _show_info_window():
+        nonlocal info_win, info_text
+        try:
+            if info_win is None:
+                # Create separate plain window with empty central widget
+                info_win = QtWidgets.QMainWindow()
+                info_win.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+                # Title may include current filename if available
+                try:
+                    fname = os.path.basename(file_loading_controller.current_file_path) if file_loading_controller.current_file_path else None
+                except Exception:
+                    fname = None
+                info_win.setWindowTitle(f"Info{(' - ' + fname) if fname else ''}")
+                # Double width (360 -> 720) and increase height to 900 for tall info blocks
+                info_win.resize(720, 900)
+
+                # Create read-only text widget
+                info_text = QtWidgets.QTextEdit()
+                info_text.setReadOnly(True)
+                # Populate with current info if available using HTML formatter
+                try:
+                    info_obj = file_loading_controller.get_current_info()
+                    if info_obj is None:
+                        info_text.setHtml('<div class="info-root">No info available. Load a file first.</div>')
+                    else:
+                        info_text.setHtml(format_info_to_html(info_obj))
+                except Exception as e:
+                    info_text.setHtml(f"<div class=\"info-root\">Could not render info: {e}</div>")
+
+                info_win.setCentralWidget(info_text)
+                info_win.show()
+
+                # When window is destroyed, clear handle
+                try:
+                    info_win.destroyed.connect(lambda: _destroy_info_window())
+                except Exception:
+                    pass
+            else:
+                try:
+                    # Update title and content on subsequent clicks
+                    try:
+                        fname = os.path.basename(file_loading_controller.current_file_path) if file_loading_controller.current_file_path else None
+                    except Exception:
+                        fname = None
+                    info_win.setWindowTitle(f"Info{(' - ' + fname) if fname else ''}")
+                    try:
+                        info_obj = file_loading_controller.get_current_info()
+                        if info_text is not None:
+                            if info_obj is None:
+                                info_text.setHtml('<div class="info-root">No info available. Load a file first.</div>')
+                            else:
+                                info_text.setHtml(format_info_to_html(info_obj))
+                    except Exception as e:
+                        if info_text is not None:
+                            info_text.setHtml(f"<div class=\"info-root\">Could not render info: {e}</div>")
+                    info_win.show()
+                    info_win.raise_()
+                    info_win.activateWindow()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    file_widget.infoRequested.connect(_show_info_window)
     
     # --- Connect Signals in a Loop ---
 
