@@ -75,10 +75,9 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
    pip install PyQt5  # or PyQt6
    ```
 
-3. **Clone and navigate to the project:**
+3. **Clonet:**
    ```bash
    git clone https://github.com/fzeuner/spectator.git
-   cd spectator
    ```
 
 4. **Stupid fix for pyqtgraph:**
@@ -101,6 +100,7 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 
 **Run the example application:**
 ```bash
+cd spectator
 conda activate spectator
 python examples/spectator_example.py
 ```
