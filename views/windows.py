@@ -46,7 +46,7 @@ class StokesSpatialWindow(BasePlotWidget):
         colors = getWidgetColors()
         self.hLine = add_line(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 0, moveable=True)
 
-        self.label_avg = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_v', 'yellow'))
+        self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         initialize_spectrum_plot_item(self.plotItem, y_label="x", x_label = "", x_units = "", y_units = "pixel")
@@ -77,7 +77,7 @@ class StokesSpatialWindow(BasePlotWidget):
         if hasattr(self, 'plot_data') and isinstance(self.plot_data, np.ndarray) and spatial_idx < len(self.plot_data):
             intensity_value = self.plot_data[spatial_idx]
         
-        self.label.setText(f"x={spatial_pos:.0f}, z={intensity_value:.5f}", size='6pt')
+        self.label.setText(f"x={spatial_pos:.0f}, z={intensity_value:.5f}", size='8pt')
         
     def _on_hline_moved(self):
         """Handles internal hLine movement and emits signal."""
@@ -206,7 +206,7 @@ class StokesSpectrumWindow(BasePlotWidget):
         colors = getWidgetColors()
         self.vLine = add_line(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 90, moveable=True)
 
-        self.label_avg = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_h', 'dodgerblue'))      
+        self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))      
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         initialize_spectrum_plot_item(self.plotItem)
@@ -238,7 +238,7 @@ class StokesSpectrumWindow(BasePlotWidget):
         if isinstance(self.plot_data, np.ndarray) and self.plot_data.ndim == 1 and 0 <= spectral_idx < self.plot_data.size:
             intensity_value = self.plot_data[spectral_idx]
 
-        self.label.setText(f"λ: {spectral_value:.0f}, z: {intensity_value:.5f}", size='6pt')
+        self.label.setText(f"λ: {spectral_value:.0f}, z: {intensity_value:.5f}", size='8pt')
         
     def _update_label_x_avg(self):
         """Updates the coordinate label for averaged region."""
@@ -522,11 +522,11 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         
         # Add yellow spectral averaging label using same positioning as spectrum windows
         colors = getWidgetColors()
-        self.label_avg_spectral = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_v', 'yellow'))
+        self.label_avg_spectral = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg_spectral, row=1, col=1)
         
         # Add blue spatial averaging label using same positioning as spectrum windows  
-        self.label_avg_spatial = pg.LabelItem(justify='left', size='6pt', color=colors.get('averaging_h', 'dodgerblue'))
+        self.label_avg_spatial = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))
         self.graphics_widget.addItem(self.label_avg_spatial, row=1, col=2)
         
         # Initialize averaging line managers now that labels exist
@@ -596,7 +596,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         index_x = np.clip(int(np.round(ypos_spatial_x)), 0, self.n_x_pixel - 1)
 
         intensity = self.data[index_spectral, index_x] 
-        self.label.setText(f"λ: {xpos_wl:.0f}, x: {ypos_spatial_x:.0f}, z: {intensity:.5f}", size='6pt') 
+        self.label.setText(f"λ: {xpos_wl:.0f}, x: {ypos_spatial_x:.0f}, z: {intensity:.5f}", size='8pt') 
 
     def update_spectral_range(self, min_val, max_val):
         set_plot_wavelength_range(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x') 
