@@ -71,7 +71,7 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 
 2. **Install required packages:**
    ```bash
-   conda install numpy pyqtgraph=0.13.2 qdarkstyle scipy
+   conda install numpy pyqtgraph qdarkstyle scipy
    pip install PyQt5  # or PyQt6
    ```
 
