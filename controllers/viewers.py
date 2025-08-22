@@ -59,6 +59,11 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     
     # Connect file selection to loading
     file_widget.fileSelected.connect(file_loading_controller.load_file)
+    # Debug: log selected file
+    try:
+        file_widget.fileSelected.connect(lambda p: print(f"[DEBUG][spectator] fileSelected: {p}"))
+    except Exception:
+        pass
     
     # Create data update function
     def update_spectator_data(new_data: np.ndarray, new_state_names: List[str] = None):
@@ -227,6 +232,14 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         
     # Connect file loading controller to data update function
     file_loading_controller.dataLoaded.connect(update_spectator_data)
+    # Also handle loading errors explicitly
+    def _on_loading_error(msg: str):
+        try:
+            print(f"[DEBUG][spectator] Loading error: {msg}")
+            QtWidgets.QMessageBox.critical(win, 'File Load Error', msg)
+        except Exception:
+            pass
+    file_loading_controller.loadingError.connect(_on_loading_error)
     spectra: List[Any] = []
     image_spectra: List[Any] = []
     spatial: List[Any] = []
