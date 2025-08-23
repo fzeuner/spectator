@@ -5,7 +5,7 @@ This module handles the connection between file selection and data loading/displ
 """
 
 import numpy as np
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 # Import local modules
@@ -15,6 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.file_model import datReader
 from controllers.app_controller import data_manager
+from controllers.app_controller import display_data
+
 from utils.config import load_config, ensure_example_config
 
 
@@ -66,18 +68,23 @@ class FileLoadingController(QtCore.QObject):
             raw_data_array = np.stack(images_array, axis=0)
             # Raw data is (states, spatial, spectral)
             
-            # Extract state names from the raw data keys
-            raw_data = reader.getDat()
-            state_names = list(raw_data.keys()) if raw_data else None
+            # Extract state names via reader API (already excludes 'info')
+            state_names = None
+            try:
+                state_names = reader.getStateNames()
+            except Exception:
+                state_names = None
             # Store file info for later display
             try:
                 self.current_info = reader.getDatInfo()
             except Exception:
                 self.current_info = None
             
-            # Filter out non-array keys (like 'info')
+            # As a safety net, ensure 'info' never appears and deduplicate
             if state_names:
-                state_names = [name for name in state_names if isinstance(raw_data.get(name), np.ndarray) and raw_data[name].ndim >= 2]
+                state_names = [s for s in state_names if isinstance(s, str) and s.strip().lower() != 'info']
+                # Normalize whitespace
+                state_names = [s.strip() for s in state_names]
             
             # Import here to avoid circular imports
             from .app_controller import data_manager
@@ -109,57 +116,6 @@ class FileLoadingController(QtCore.QObject):
             error_msg = f"Error loading file {file_path}: {str(e)}"
             self.loadingError.emit(error_msg)
     
-    def _process_images_for_viewer(self, images_array: List[np.ndarray]) -> np.ndarray:
-        """
-        Process the images array from datReader into the format expected by the viewer.
-        
-        The viewer expects data in the format (N_states, N_spectral, N_spatial)
-        where N_states is the number of different states/images.
-        
-        The data from .dat files comes in as (N_states, N_spatial, N_spectral)
-        so we need to transpose to get the correct axis order.
-        
-        Args:
-            images_array: List of image arrays from datReader
-            
-        Returns:
-            Processed numpy array suitable for the viewer
-        """
-        if not images_array:
-            raise ValueError("Empty images array")
-        
-        # Stack all images along the first axis (states axis)
-        stacked_data = np.stack(images_array, axis=0)
-        
-        print(f"Raw stacked data shape: {stacked_data.shape}")
-        print(f"Raw data axis order: (states, spatial, spectral)")
-        
-        # The viewer expects 3D data: (states, spectral, spatial)
-        # But .dat files provide: (states, spatial, spectral)
-        # So we need to transpose the last two dimensions
-        if stacked_data.ndim == 3:
-            # Transpose from (states, spatial, spectral) to (states, spectral, spatial)
-            transposed_data = np.transpose(stacked_data, (0, 2, 1))
-            print(f"Transposed data shape: {transposed_data.shape}")
-            print(f"Final data axis order: (states, spectral, spatial)")
-            return transposed_data
-        elif stacked_data.ndim == 4:
-            # Data is (N_states, dim1, dim2, dim3) - need to figure out which is which
-            # For now, assume it's (states, spatial, spectral, extra_dim)
-            if stacked_data.shape[3] == 1:
-                # Remove singleton dimension and transpose
-                squeezed_data = stacked_data.squeeze(axis=3)
-                transposed_data = np.transpose(squeezed_data, (0, 2, 1))
-                print(f"Squeezed and transposed data shape: {transposed_data.shape}")
-                return transposed_data
-            else:
-                # For now, just take the first slice and transpose
-                sliced_data = stacked_data[:, :, :, 0]
-                transposed_data = np.transpose(sliced_data, (0, 2, 1))
-                print(f"Sliced and transposed data shape: {transposed_data.shape}")
-                return transposed_data
-        else:
-            raise ValueError(f"Unsupported data dimensionality: {stacked_data.ndim}")
     
     def display_data(self, data: np.ndarray, state_names: List[str]):
         """
@@ -185,7 +141,7 @@ class FileLoadingController(QtCore.QObject):
             title = f"Spectator - {filename}"
             
             # Use the data manager to display the data
-            viewer = data_manager.display_data(
+            viewer = display_data(
                 data, 
                 *axes, 
                 title=title, 
@@ -402,28 +358,7 @@ class FileListingController(QtWidgets.QWidget):
         except Exception:
             pass
 
-    def show_info(self):
-        """Show a small dialog with listing rules and current context."""
-        try:
-            base = self.directory[0] if self.directory else (self._start_directory or '')
-            mode = self._listing_mode
-            must_dir = self.must_be_in_directory
-            excludes = ', '.join(self.excluded_file_types)
-            auto_recent = bool(self._config.get('auto_navigate_recent', False))
-            msg = (
-                f"Current directory: {base}\n"
-                f"Mode: {mode}\n\n"
-                f"Listing rules:\n"
-                f"- Only .dat files under subfolders containing '{must_dir}' are shown.\n"
-                f"- Excluded filename terms: {excludes or '(none)'}\n"
-                f"- Auto-navigate recent: {'on' if auto_recent else 'off'}\n\n"
-                f"Tips:\n"
-                f"- Click a directory to drill down.\n"
-                f"- Use Refresh to re-scan for newly created files.\n"
-            )
-            QtWidgets.QMessageBox.information(self, 'Files listing info', msg)
-        except Exception:
-            pass
+    
 
     def _populate_directories(self, base_dir: str):
         """Populate the list with immediate subdirectories of base_dir (no filtering)."""

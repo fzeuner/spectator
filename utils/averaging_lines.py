@@ -298,7 +298,7 @@ class AveragingLineManager(QtCore.QObject):
                 f"{self.axis_name} {self.label_terms[0]}: {pos1:.0f}, "
                 f"{self.axis_name} {self.label_terms[1]}: {center:.0f}, "
                 f"{self.axis_name} {self.label_terms[2]}: {pos2:.0f}",
-                size='6pt'
+                size='8pt'
             )
 
     def create_from_span(self, start: float, end: float) -> None:
