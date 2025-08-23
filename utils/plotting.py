@@ -369,6 +369,10 @@ def create_wavelength_limit_controls(name: str) -> Tuple[QtWidgets.QLabel, QtWid
         Tuple of (label, line_edit, layout)
     """
     label = QtWidgets.QLabel(name)
+    try:
+        label.setStyleSheet(f"font-size: {DEFAULT_LABEL_SIZE};")
+    except Exception:
+        pass
     line_edit = QtWidgets.QLineEdit()
     line_edit.setPlaceholderText("Optional")
     
@@ -379,14 +383,18 @@ def create_wavelength_limit_controls(name: str) -> Tuple[QtWidgets.QLabel, QtWid
     return label, line_edit, layout
 
 def create_wavelength_limit_controls(name: str):
-    """Label for wavelength limits"""
+    """Label for wavelength limits (overrides older duplicate)."""
     wavelength_label = QtWidgets.QLabel(name)
+    try:
+        wavelength_label.setStyleSheet(f"font-size: {DEFAULT_LABEL_SIZE};")
+    except Exception:
+        pass
     wavelength_edit = QtWidgets.QLineEdit()
     wavelength_edit.setPlaceholderText("Optional")
     layout = QtWidgets.QHBoxLayout()
     layout.addWidget(wavelength_label)
     layout.addWidget(wavelength_edit)
-    return(wavelength_label, wavelength_edit, layout)
+    return (wavelength_label, wavelength_edit, layout)
 
 def create_y_limit_controls(name: str) -> Tuple[QtWidgets.QLabel, QtWidgets.QLineEdit, QtWidgets.QHBoxLayout]:
     """

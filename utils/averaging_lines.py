@@ -294,10 +294,15 @@ class AveragingLineManager(QtCore.QObject):
     def _update_label(self, pos1: float, center: float, pos2: float) -> None:
         """Update the label widget with current positions."""
         if self.label_widget:
+            # Use compact labels without axis prefixes
+            # vertical (spectral): left/center/right -> l/c/r
+            # horizontal (spatial): lower/center/upper -> l/c/u
+            if self.orientation == 'vertical':
+                t1, t2, t3 = 'l', 'c', 'r'
+            else:
+                t1, t2, t3 = 'l', 'c', 'u'
             self.label_widget.setText(
-                f"{self.axis_name} {self.label_terms[0]}: {pos1:.0f}, "
-                f"{self.axis_name} {self.label_terms[1]}: {center:.0f}, "
-                f"{self.axis_name} {self.label_terms[2]}: {pos2:.0f}",
+                f"{t1}: {pos1:.0f}, {t2}: {center:.0f}, {t3}: {pos2:.0f}",
                 size='8pt'
             )
 

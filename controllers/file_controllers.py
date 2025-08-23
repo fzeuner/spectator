@@ -36,6 +36,8 @@ class FileLoadingController(QtCore.QObject):
         super().__init__(parent)
         self.current_data = None
         self.current_file_path = None
+        # Keep strong references to created viewer windows so they don't get GC'd
+        self._open_viewers = []
         # Load user configuration (non-fatal if missing)
         ensure_example_config()
         self._config = load_config()
@@ -147,7 +149,12 @@ class FileLoadingController(QtCore.QObject):
                 title=title, 
                 state_names=state_names
             )
-            
+            # Store reference to keep window alive under running event loop
+            try:
+                if viewer is not None:
+                    self._open_viewers.append(viewer)
+            except Exception:
+                pass
             return viewer
             
         except Exception as e:
@@ -206,8 +213,15 @@ class FileListingController(QtWidgets.QWidget):
     def _setup_ui(self):
         """Setup the user interface."""
         # Create widgets
-        self.info_button = QtWidgets.QPushButton('List info')
-        self.info_button.clicked.connect(self.infoRequested.emit)
+        # Display toggle controls whether selecting a file also opens the main viewer
+        self.display_button = QtWidgets.QPushButton('Display')
+        self.display_button.setCheckable(True)
+        self.display_button.setChecked(True)  # Activated by default
+        self.display_button.setToolTip('If enabled, selecting a file will open the viewer. If disabled, only load and show info.')
+        # Style to indicate activation like other control buttons
+        self.display_button.toggled.connect(self._on_display_toggled)
+        # Initialize style based on default checked state
+        self.display_button.setStyleSheet("background-color: red;" if self.display_button.isChecked() else "")
         self.button = QtWidgets.QPushButton('Choose Directory')
         self.button.clicked.connect(self.handleChooseDirectories)
         self.refresh_button = QtWidgets.QPushButton('Refresh')
@@ -229,13 +243,15 @@ class FileListingController(QtWidgets.QWidget):
         # Create layout
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.listWidget)
-        # Place 'List info' button above the other buttons
-        layout.addWidget(self.info_button)
-        # Buttons row (Choose + Refresh)
+        # Place 'Display' toggle above the other buttons
+        layout.addWidget(self.display_button)
+        # Buttons row (Choose + Refresh) – make them share full width equally
         buttons_row = QtWidgets.QHBoxLayout()
-        buttons_row.addWidget(self.button)
-        buttons_row.addWidget(self.refresh_button)
-        buttons_row.addStretch(1)
+        # Make buttons expand equally to fill the row
+        self.button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.refresh_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        buttons_row.addWidget(self.button, 1)
+        buttons_row.addWidget(self.refresh_button, 1)
         layout.addLayout(buttons_row)
         layout.addWidget(self.directorylabel)
         layout.addWidget(self.fileinfolabel1)
@@ -244,6 +260,16 @@ class FileListingController(QtWidgets.QWidget):
     def _connect_signals(self):
         """Connect widget signals to handlers."""
         self.listWidget.itemClicked.connect(self.on_file_clicked)
+        # Keep display button style in sync if programmatically changed
+        try:
+            self.display_button.toggled.connect(self._on_display_toggled)
+        except Exception:
+            pass
+
+    @QtCore.pyqtSlot(bool)
+    def _on_display_toggled(self, checked: bool):
+        """Visualize activation state by coloring red when active."""
+        self.display_button.setStyleSheet("background-color: red;" if checked else "")
     
     def on_file_clicked(self, item):
         """Handle file selection from the list."""

@@ -67,8 +67,7 @@ class FileBrowserApp(QtWidgets.QMainWindow):
     def _connect_signals(self):
         # Clicking a file in the list triggers loading
         self.file_lister.fileSelected.connect(self._on_file_selected)
-        # Ask to show info
-        self.file_lister.infoRequested.connect(self._on_info_requested)
+        # 'Display' toggle replaced 'List info' button; info is refreshed automatically on load
         # Loader results
         self.file_loader.dataLoaded.connect(self._on_data_loaded)
         self.file_loader.loadingError.connect(self._on_loading_error)
@@ -85,17 +84,31 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.statusBar().clearMessage()
         # Update info dock contents (keep info visible)
         self._refresh_info_dock()
-        # Briefly print loaded data info to terminal
+        # Condensed terminal output: only dims line
         try:
             shape = getattr(data, 'shape', None)
-            print(f"Loaded array shape: {shape}")
+            if isinstance(shape, tuple):
+                if len(shape) == 3:
+                    labels = ['states', 'spectral', 'spatial']
+                elif len(shape) == 2:
+                    labels = ['spectral', 'spatial']
+                elif len(shape) == 1:
+                    labels = ['spectral']
+                else:
+                    labels = [f"dim{i}" for i in range(len(shape))]
+                dims_str = ", ".join(f"{label}={shape[i]}" for i, label in enumerate(labels))
+                print(f"Loaded array dims: {dims_str}")
         except Exception:
             pass
-        if state_names:
-            print("State names:", ", ".join(state_names))
-        # Display via main viewer
+        # Display via main viewer only if 'Display' toggle is enabled
         try:
-            self.file_loader.display_data(data, state_names)
+            display_enabled = True
+            try:
+                display_enabled = bool(self.file_lister.display_button.isChecked())
+            except Exception:
+                display_enabled = True
+            if display_enabled:
+                self.file_loader.display_data(data, state_names)
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Display Error", str(e))
 

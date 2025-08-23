@@ -154,6 +154,14 @@ class StokesSpatialWindow(BasePlotWidget):
     def _emit_hline_changed(self):
         """Emit signal when horizontal line position changes."""
         self.hLineChanged.emit(self.hLine.value())
+
+    def update_spatial_range(self, min_val, max_val):
+        """Updates the spatial (x pixel) axis range of the spatial plot (y-axis)."""
+        set_plot_wavelength_range(self.plotItem, self.x, min_val, max_val, axis='y')
+
+    def reset_spatial_range(self):
+        """Resets the spatial (x pixel) axis range to full range on the spatial plot (y-axis)."""
+        reset_plot_wavelength_range(self.plotItem, self.x, axis='y')
     
     @QtCore.pyqtSlot(float)
     @QtCore.pyqtSlot(float, float, int)
@@ -218,9 +226,13 @@ class StokesSpectrumWindow(BasePlotWidget):
 
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
+        # Initialize current_x_idx to center if not set
+        if not hasattr(self, 'current_x_idx'):
+            n_x = self.full_data.shape[1]
+            self.current_x_idx = n_x // 2 if n_x > 0 else 0
+        # Set initial plot data based on current_x_idx
         self.plot_data = self.full_data[:, self.current_x_idx]
         self.plot_curve.setData(self.spectral, self.plot_data)
-        self.plot_curve.setData(self.spectral, 0*self.plot_data)
 
         # Emit initial Y range and update label
         self._emit_y_range_changed(None, self.plotItem.viewRange()[1])
@@ -353,7 +365,15 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.plotItem.addItem(self.image_item)
         self.histogram = create_histogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
 
-        self.image_item.setImage(self.data.T) # <--- Transpose the data here for plotting spectral along x axis!
+        # Respect pyqtgraph's imageAxisOrder to avoid unintended transposes across versions
+        # - 'row-major': array is (rows=y, cols=x) -> need transpose because data is (spectral=x, spatial=y)
+        # - 'col-major': array is (x, y) -> no transpose needed
+        axis_order = pg.getConfigOption('imageAxisOrder')
+        if axis_order == 'row-major':
+            img = self.data.T
+        else:
+            img = self.data
+        self.image_item.setImage(img)
 
         x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
         x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
@@ -596,13 +616,22 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         index_x = np.clip(int(np.round(ypos_spatial_x)), 0, self.n_x_pixel - 1)
 
         intensity = self.data[index_spectral, index_x] 
-        self.label.setText(f"λ: {xpos_wl:.0f}, x: {ypos_spatial_x:.0f}, z: {intensity:.5f}", size='8pt') 
+        # Compact label: use 'l' for spectral and omit the 'x' prefix while keeping the spatial value
+        self.label.setText(f"l: {xpos_wl:.0f}, {ypos_spatial_x:.0f}, z: {intensity:.5f}", size='8pt') 
 
     def update_spectral_range(self, min_val, max_val):
         set_plot_wavelength_range(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x') 
 
     def reset_spectral_range(self):
         reset_plot_wavelength_range(self.plotItem, self.spectral_pixels, axis='x') 
+
+    def update_spatial_range(self, min_val, max_val):
+        """Updates the spatial (x pixel) axis range of the image plot (y-axis)."""
+        set_plot_wavelength_range(self.plotItem, self.spatial_pixels, min_val, max_val, axis='y')
+
+    def reset_spatial_range(self):
+        """Resets the spatial (x pixel) axis range of the image plot (y-axis) to full range."""
+        reset_plot_wavelength_range(self.plotItem, self.spatial_pixels, axis='y')
 
     def updateExternalVLine(self, xpos_wl: float): 
         if not self.crosshair_locked:

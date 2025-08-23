@@ -260,7 +260,7 @@ class SpectrumLimitControlGroup(BaseControlWidget):
             spatial_widget: Associated spatial plot widget
             parent: Parent widget
         """
-        super().__init__(f"{stokes_name} z limits", parent)
+        super().__init__(f"{stokes_name}", parent)
         
         self.stokes_name = stokes_name
         self.spectrum_widget = spectrum_widget
@@ -418,6 +418,9 @@ class PlotControlWidget(QtWidgets.QWidget):
     crosshairMoved = QtCore.pyqtSignal(float, float, int) # x, y, source_stokes_index
     xlamRangeChanged = QtCore.pyqtSignal(object, object)
     resetXlamRangeRequested = QtCore.pyqtSignal()
+    # Spatial axis (x pixel) range controls
+    spatialRangeChanged = QtCore.pyqtSignal(object, object)
+    resetSpatialRangeRequested = QtCore.pyqtSignal()
 
     def __init__(self):
         super().__init__(None)
@@ -451,8 +454,21 @@ class PlotControlWidget(QtWidgets.QWidget):
         limits_content_widget = QtWidgets.QWidget()
         self.limits_layout = QtWidgets.QVBoxLayout(limits_content_widget)
         self.limits_dock.addWidget(limits_content_widget)
+        # Parent group for axis limits
+        axis_limits_group = QtWidgets.QGroupBox("Axis limits")
+        axis_limits_layout = QtWidgets.QVBoxLayout(axis_limits_group)
 
-        self._init_wavelength_range_controls(self.limits_layout)
+        # Add lambda and x sub-groups into the parent
+        self._init_wavelength_range_controls(axis_limits_layout)
+        self._init_spatial_range_controls(axis_limits_layout)
+
+        # Add the parent group to the dock layout
+        self.limits_layout.addWidget(axis_limits_group)
+
+        # Parent group for z-axis (intensity) limits per state
+        self.z_limits_group = QtWidgets.QGroupBox("z axis limits")
+        self.z_limits_layout = QtWidgets.QVBoxLayout(self.z_limits_group)
+        self.limits_layout.addWidget(self.z_limits_group)
 
         # --- Widgets for the "lines" dock ---
         self.lines_content_widget = LinesControlGroup(self) # Instance of LinesControlGroup
@@ -476,7 +492,7 @@ class PlotControlWidget(QtWidgets.QWidget):
     
     def _init_wavelength_range_controls(self, parent_layout: QtWidgets.QVBoxLayout):
         """Initializes controls for wavelength (wavelength) axis limits, now taking a parent layout."""
-        wavelength_group_box = QtWidgets.QGroupBox("λ axis limits")
+        wavelength_group_box = QtWidgets.QGroupBox("λ")
         limits_wavelength_layout = QtWidgets.QVBoxLayout(wavelength_group_box)
 
         for limit_type in ['min', 'max']:
@@ -491,7 +507,51 @@ class PlotControlWidget(QtWidgets.QWidget):
         limits_wavelength_layout.addWidget(self.reset_wavelength_button)
 
         parent_layout.addWidget(wavelength_group_box)
-        parent_layout.addStretch(1)
+
+    def _init_spatial_range_controls(self, parent_layout: QtWidgets.QVBoxLayout):
+        """Initializes controls for spatial (x pixel) axis limits."""
+        spatial_group_box = QtWidgets.QGroupBox("x")
+        limits_spatial_layout = QtWidgets.QVBoxLayout(spatial_group_box)
+
+        for limit_type in ['min', 'max']:
+            label, edit, layout = create_wavelength_limit_controls(limit_type)
+            setattr(self, f'spatial_{limit_type}_label', label)
+            setattr(self, f'spatial_{limit_type}_edit', edit)
+            edit.editingFinished.connect(self._spatial_range_changed)
+            limits_spatial_layout.addLayout(layout)
+
+        self.reset_spatial_button = QtWidgets.QPushButton("Reset x range")
+        self.reset_spatial_button.clicked.connect(self.resetSpatialRangeRequested.emit)
+        limits_spatial_layout.addWidget(self.reset_spatial_button)
+
+        parent_layout.addWidget(spatial_group_box)
+    
+    def _spatial_range_changed(self):
+        """Handle spatial (x pixel) range change from edits."""
+        min_text = self.spatial_min_edit.text().strip()
+        max_text = self.spatial_max_edit.text().strip()
+
+        min_val = None
+        max_val = None
+        if min_text:
+            try:
+                min_val = float(min_text)
+            except ValueError:
+                min_val = None
+        if max_text:
+            try:
+                max_val = float(max_text)
+            except ValueError:
+                max_val = None
+
+        if min_val is None and max_val is None:
+            return
+
+        if (min_val is not None) and (max_val is not None):
+            if min_val >= max_val:
+                return
+
+        self.spatialRangeChanged.emit(min_val, max_val)
     
     def init_spectrum_limit_controls(self, spectra_widgets: List,
                                    spectrum_image_widgets: List,
@@ -521,7 +581,11 @@ class PlotControlWidget(QtWidgets.QWidget):
                 spatial_widget=spatial_widget
             )
             
-            self.limits_layout.addWidget(limit_group)
+            if hasattr(self, 'z_limits_layout'):
+                self.z_limits_layout.addWidget(limit_group)
+            else:
+                # Fallback: in case init order changes
+                self.limits_layout.addWidget(limit_group)
     
     def _wavelength_range_changed(self):
         """Handle wavelength range change."""

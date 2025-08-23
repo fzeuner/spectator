@@ -4,6 +4,7 @@ from pyqtgraph.Qt import QtWidgets
 import qdarkstyle
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
+from utils.constants import CONTROL_PANEL_SIZE
 from typing import List, Dict, Any 
  
 
@@ -30,7 +31,12 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         title: Window title.
         state_names: List of names for the states (e.g., ['I', 'Q', 'U', 'V'])
     """  
-    app = pg.mkQApp(title)
+    # Use existing QApplication if present, otherwise create one
+    app = QtWidgets.QApplication.instance()
+    created_app = False
+    if app is None:
+        app = pg.mkQApp(title)
+        created_app = True
     win = QtWidgets.QMainWindow()
     area = DockArea()
     win.setCentralWidget(area)
@@ -70,6 +76,16 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
          image_spectra.append(win_image_spectrum)
          spatial.append(win_spatial)
          
+         # Initialize spectrum window profile from the image window's current horizontal crosshair (x position)
+         try:
+             if hasattr(win_image_spectrum, 'hLine'):
+                 x_pos = float(win_image_spectrum.hLine.value())
+                 n_x = win_spectrum.full_data.shape[1]
+                 x_idx = int(np.clip(np.round(x_pos), 0, n_x - 1))
+                 win_spectrum.update_spectrum_data(x_idx)
+         except Exception as e:
+             print(f"Warning: could not initialize spectrum window from crosshair: {e}")
+
          # Create Docks
          spectrum_dock = Dock(f"{base_name} spectrum", size=(350, 150))
          spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(350, 150))
@@ -89,7 +105,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial) # Now initialize UI for limits
        
     # --- Create Control Dock ---
-    control_dock = Dock("Control", size=(70,1000))
+    control_dock = Dock("Control", size=(CONTROL_PANEL_SIZE[0], CONTROL_PANEL_SIZE[1]))
     
     # --- Arrange Docks in the DockArea ---
     
@@ -111,6 +127,11 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     area.addDock(control_dock, 'right')
 
     # Control widget
+    # Ensure control panel has a reasonable minimum width
+    try:
+        control_widget.setMinimumWidth(CONTROL_PANEL_SIZE[0])
+    except Exception:
+        pass
     control_dock.addWidget(control_widget)
     
     # --- Connect Signals in a Loop ---
@@ -183,6 +204,15 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         control_widget.xlamRangeChanged.connect(image_spectrum_widget.update_spectral_range)
         control_widget.resetXlamRangeRequested.connect(image_spectrum_widget.reset_spectral_range)
 
+    # Connect the spatialRangeChanged signal for x-axis (spatial pixel) limits
+    for image_spectrum_widget in image_spectra:
+        control_widget.spatialRangeChanged.connect(image_spectrum_widget.update_spatial_range)
+        control_widget.resetSpatialRangeRequested.connect(image_spectrum_widget.reset_spatial_range)
+
+    for spatial_widget in spatial:
+        control_widget.spatialRangeChanged.connect(spatial_widget.update_spatial_range)
+        control_widget.resetSpatialRangeRequested.connect(spatial_widget.reset_spatial_range)
+
     # --- Show Window and Run App ---
     win.show()
     try:
@@ -194,4 +224,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     except Exception as e:
         print(f"Could not apply qdarkstyle: {e}")
 
-    sys.exit(app.exec_()) # Use sys.exit for proper exit codes
+    # If we created the QApplication here, start the event loop; otherwise, return window for embedding
+    if created_app:
+        app.exec_()
+        return None
+    else:
+        return win

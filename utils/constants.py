@@ -41,7 +41,7 @@ DEFAULT_DATA_TYPE = 'float64'
 # UI layout constants
 DEFAULT_DOCK_SIZE = (400, 300)
 DEFAULT_WINDOW_SIZE = (1200, 800)
-CONTROL_PANEL_SIZE = (300, 200)
+CONTROL_PANEL_SIZE = (130, 200)
 
 # Color scheme definitions
 class ColorSchemes:
