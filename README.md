@@ -129,7 +129,7 @@ python examples/z3showred_example.py
 
 This launches a file browser interface that mimics the original IDL Z3showred workflow, allowing you to browse and select `.dat` files for visualization. The file browser automatically filters for science data and provides an intuitive interface for data exploration.
 
-![example](docs/file_browser.png)
+![example](docs/z3showred.png)
 
 **For convenience, you can create an alias:**
 ```bash
