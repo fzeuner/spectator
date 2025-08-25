@@ -2,13 +2,13 @@
 # Run Spectator in the 'spectator' conda environment
 # Usage:
 #   ./run_spectator.sh
-# Always runs: examples/spectator.py
+# Always runs: examples/z3showred_example.py
 
 set -euo pipefail
 
 # Resolve repo root as the directory containing this script
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET_REL="examples/spectator.py"
+TARGET_REL="examples/z3showred_example.py"
 TARGET_ABS="${REPO_ROOT}/${TARGET_REL}"
 
 if [[ ! -f "${TARGET_ABS}" ]]; then

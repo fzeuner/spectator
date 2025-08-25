@@ -110,6 +110,7 @@ class FileLoadingController(QtCore.QObject):
             # Store current data
             self.current_data = processed_data
             self.current_file_path = file_path
+            self._current_filename = os.path.basename(file_path)
             
             # Emit signal with loaded data
             self.dataLoaded.emit(processed_data, state_names)
@@ -125,21 +126,30 @@ class FileLoadingController(QtCore.QObject):
         
         Args:
             data: Processed data array
-            state_names: Names for the states
+            state_names: List of state names
         """
         try:
-            # Determine the axis specification based on data shape
-            if data.ndim == 3:
-                # Assume (states, spectral, spatial)
-                axes = ['states', 'spectral', 'spatial']
-            elif data.ndim == 2:
-                # Assume (spectral, spatial)
-                axes = ['spectral', 'spatial']
-            else:
-                raise ValueError(f"Unsupported data dimensionality: {data.ndim}")
+            # Check if we should close current viewers (when "Always new" is deactivated)
+            if hasattr(self, 'parent') and hasattr(self.parent(), 'file_lister'):
+                file_lister = self.parent().file_lister
+                if hasattr(file_lister, 'always_new_button') and not file_lister.always_new_button.isChecked():
+                    data_manager.close_current_viewers()
             
-            # Extract filename for title
-            filename = os.path.basename(self.current_file_path) if self.current_file_path else "Loaded Data"
+            # Get the filename for the title
+            filename = getattr(self, '_current_filename', 'Unknown')
+            
+            # Determine axes based on data shape
+            if len(data.shape) == 3:
+                # 3D data: assume (states, spectral, spatial)
+                axes = ('states', 'spectral', 'spatial')
+            elif len(data.shape) == 2:
+                # 2D data: assume (spectral, spatial)
+                axes = ('spectral', 'spatial')
+                state_names = None  # No states for 2D data
+            else:
+                raise ValueError(f"Unsupported data shape: {data.shape}")
+            
+            # Create title with filename
             title = f"Spectator - {filename}"
             
             # Use the data manager to display the data
@@ -149,12 +159,7 @@ class FileLoadingController(QtCore.QObject):
                 title=title, 
                 state_names=state_names
             )
-            # Store reference to keep window alive under running event loop
-            try:
-                if viewer is not None:
-                    self._open_viewers.append(viewer)
-            except Exception:
-                pass
+            
             return viewer
             
         except Exception as e:
@@ -222,6 +227,15 @@ class FileListingController(QtWidgets.QWidget):
         self.display_button.toggled.connect(self._on_display_toggled)
         # Initialize style based on default checked state
         self.display_button.setStyleSheet("background-color: red;" if self.display_button.isChecked() else "")
+        
+        # Always new toggle controls whether to close current viewer when loading new data
+        self.always_new_button = QtWidgets.QPushButton('Always new')
+        self.always_new_button.setCheckable(True)
+        self.always_new_button.setChecked(True)  # Activated by default
+        self.always_new_button.setToolTip('If enabled, opens new viewer for each file. If disabled, closes current viewer when loading new data.')
+        self.always_new_button.toggled.connect(self._on_always_new_toggled)
+        # Initialize style based on default checked state
+        self.always_new_button.setStyleSheet("background-color: red;" if self.always_new_button.isChecked() else "")
         self.button = QtWidgets.QPushButton('Choose Directory')
         self.button.clicked.connect(self.handleChooseDirectories)
         self.refresh_button = QtWidgets.QPushButton('Refresh')
@@ -243,8 +257,13 @@ class FileListingController(QtWidgets.QWidget):
         # Create layout
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.listWidget)
-        # Place 'Display' toggle above the other buttons
-        layout.addWidget(self.display_button)
+        # Place toggle buttons above the other buttons
+        toggles_row = QtWidgets.QHBoxLayout()
+        self.display_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.always_new_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        toggles_row.addWidget(self.display_button, 1)
+        toggles_row.addWidget(self.always_new_button, 1)
+        layout.addLayout(toggles_row)
         # Buttons row (Choose + Refresh) – make them share full width equally
         buttons_row = QtWidgets.QHBoxLayout()
         # Make buttons expand equally to fill the row
@@ -263,6 +282,7 @@ class FileListingController(QtWidgets.QWidget):
         # Keep display button style in sync if programmatically changed
         try:
             self.display_button.toggled.connect(self._on_display_toggled)
+            self.always_new_button.toggled.connect(self._on_always_new_toggled)
         except Exception:
             pass
 
@@ -270,6 +290,11 @@ class FileListingController(QtWidgets.QWidget):
     def _on_display_toggled(self, checked: bool):
         """Visualize activation state by coloring red when active."""
         self.display_button.setStyleSheet("background-color: red;" if checked else "")
+    
+    @QtCore.pyqtSlot(bool)
+    def _on_always_new_toggled(self, checked: bool):
+        """Visualize activation state by coloring red when active."""
+        self.always_new_button.setStyleSheet("background-color: red;" if checked else "")
     
     def on_file_clicked(self, item):
         """Handle file selection from the list."""

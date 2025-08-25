@@ -125,6 +125,13 @@ class AveragingLineManager(QtCore.QObject):
                 self.on_region_created()
             except Exception:
                 pass
+                
+        # Also fire callback for button activation (even if lines existed before)
+        if self.has_lines() and hasattr(self, '_button_activation_callback') and self._button_activation_callback:
+            try:
+                self._button_activation_callback()
+            except Exception:
+                pass
     
     def remove_lines(self) -> None:
         """Remove all averaging lines from the plot."""
@@ -175,32 +182,24 @@ class AveragingLineManager(QtCore.QObject):
             self.line1.blockSignals(True)
             self.line2.blockSignals(True)
             self.center_line.blockSignals(True)
-        
+
         try:
-            # Clamp positions to valid range
-            pos1 = self._clamp_position(pos1)
-            pos2 = self._clamp_position(pos2)
-            center = self._clamp_position(center)
-            
-            # Ensure proper ordering and minimum distance
+            # Normalize ordering and width, then apply unified constraints
             if pos1 > pos2:
                 pos1, pos2 = pos2, pos1
-            
-            if (pos2 - pos1) < MIN_LINE_DISTANCE:
-                center_temp = (pos1 + pos2) / 2
-                pos1 = self._clamp_position(center_temp - MIN_LINE_DISTANCE / 2)
-                pos2 = self._clamp_position(center_temp + MIN_LINE_DISTANCE / 2)
-            
-            center = (pos1 + pos2) / 2
-            
+            requested_width = max(MIN_LINE_DISTANCE, float(pos2 - pos1))
+            requested_center = (pos1 + pos2) / 2.0 if center is None else float(center)
+
+            new_pos1, new_center, new_pos2 = self._constrain_region(requested_center, requested_width)
+
             # Update line positions
-            self.line1.setValue(pos1)
-            self.line2.setValue(pos2)
-            self.center_line.setValue(center)
-            
+            self.line1.setValue(new_pos1)
+            self.line2.setValue(new_pos2)
+            self.center_line.setValue(new_center)
+
             # Update label
-            self._update_label(pos1, center, pos2)
-            
+            self._update_label(new_pos1, new_center, new_pos2)
+
         finally:
             if block_signals:
                 self.line1.blockSignals(False)
@@ -210,6 +209,41 @@ class AveragingLineManager(QtCore.QObject):
     def _clamp_position(self, pos: float) -> float:
         """Clamp position to valid data range."""
         return np.clip(pos, 0, self.data_range - 1)
+    
+    def _bounded_width(self, width: float) -> float:
+        """Ensure requested width fits within data bounds and respects minimum distance."""
+        max_width = max(1.0, (self.data_range - 1))
+        return float(np.clip(width, MIN_LINE_DISTANCE, max_width))
+
+    def _constrain_region(self, center: float, width: float) -> Tuple[float, float, float]:
+        """Given a desired center and width, return (pos1, center, pos2) constrained to data bounds."""
+        w = self._bounded_width(width)
+        spacing = w / 2.0
+        min_center = spacing
+        max_center = (self.data_range - 1) - spacing
+        c = float(np.clip(center, min_center, max_center))
+        p1 = c - spacing
+        p2 = c + spacing
+        return p1, c, p2
+
+    def _update_label(self, pos1: float, center: float, pos2: float) -> None:
+        """Update the optional label widget with current positions."""
+        if not self.label_widget:
+            return
+        # vertical (spectral): left/center/right -> l/c/r
+        # horizontal (spatial): lower/center/upper -> l/c/u
+        if self.orientation == 'vertical':
+            t1, t2, t3 = 'l', 'c', 'r'
+        else:
+            t1, t2, t3 = 'l', 'c', 'u'
+        try:
+            self.label_widget.setText(
+                f"{t1}: {pos1:.0f}, {t2}: {center:.0f}, {t3}: {pos2:.0f}",
+                size='8pt'
+            )
+        except Exception:
+            # Be tolerant if label widget is missing features
+            pass
     
     def _update_lines_and_emit(self, source_line=None) -> None:
         """Update line positions and emit region changed signal."""
@@ -222,89 +256,40 @@ class AveragingLineManager(QtCore.QObject):
         self.center_line.blockSignals(True)
         
         try:
-            current_pos1 = self.line1.value()
-            current_pos2 = self.line2.value()
-            current_center = self.center_line.value()
-            width = max(current_pos2 - current_pos1, MIN_LINE_DISTANCE)
-            half = width / 2.0
+            current_pos1 = float(self.line1.value())
+            current_pos2 = float(self.line2.value())
+            current_center = float(self.center_line.value())
+            current_width = max(MIN_LINE_DISTANCE, float(current_pos2 - current_pos1))
 
-            new_pos1 = current_pos1
-            new_pos2 = current_pos2
-            new_center = current_center
+            # Ensure width can fit in data range
+            width = self._bounded_width(current_width)
 
-            # Handle different source lines
+            # Determine desired center based on which line moved
             if source_line is self.line1:
-                # Move left/lower edge; keep width constant, clamp so right/upper stays within bounds
-                candidate_pos1 = self._clamp_position(current_pos1)
-                candidate_pos2 = candidate_pos1 + width
-                if candidate_pos2 > (self.data_range - 1):
-                    # Clamp pos1 so pos2 stays in range and width preserved
-                    candidate_pos1 = max(0, (self.data_range - 1) - width)
-                    candidate_pos2 = candidate_pos1 + width
-                new_pos1, new_pos2 = candidate_pos1, candidate_pos2
-                new_center = (new_pos1 + new_pos2) / 2
-
+                desired_center = self._clamp_position(current_pos1) + width / 2.0
             elif source_line is self.line2:
-                # Move right/upper edge; keep width constant, clamp so left/lower stays within bounds
-                candidate_pos2 = self._clamp_position(current_pos2)
-                candidate_pos1 = candidate_pos2 - width
-                if candidate_pos1 < 0:
-                    candidate_pos1 = 0
-                    candidate_pos2 = candidate_pos1 + width
-                    if candidate_pos2 > (self.data_range - 1):
-                        candidate_pos2 = self.data_range - 1
-                        candidate_pos1 = candidate_pos2 - width
-                new_pos1, new_pos2 = candidate_pos1, candidate_pos2
-                new_center = (new_pos1 + new_pos2) / 2
+                desired_center = self._clamp_position(current_pos2) - width / 2.0
+            elif source_line is self.center_line:
+                desired_center = current_center
+            else:
+                desired_center = current_center
 
-            elif source_line == self.center_line:
-                # Move center; preserve width by clamping center range so both edges stay in-bounds
-                spacing = max(half, MIN_LINE_DISTANCE / 2.0)
-                min_center = spacing
-                max_center = (self.data_range - 1) - spacing
-                new_center = float(np.clip(current_center, min_center, max_center))
-                new_pos1 = new_center - spacing
-                new_pos2 = new_center + spacing
+            new_pos1, new_center, new_pos2 = self._constrain_region(desired_center, width)
 
-            
             # Update line positions
             self.line1.setValue(new_pos1)
             self.line2.setValue(new_pos2)
-            self.center_line.setValue((new_pos1 + new_pos2) / 2)
-            
-            # Get final positions and emit signal
-            final_pos1 = self.line1.value()
-            final_pos2 = self.line2.value()
-            final_center = (final_pos1 + final_pos2) / 2
-            
-            self.regionChanged.emit(final_pos1, final_center, final_pos2, self.stokes_index)
-            
+            self.center_line.setValue(new_center)
+
+            # Emit constrained positions
+            self.regionChanged.emit(new_pos1, new_center, new_pos2, self.stokes_index)
+
             # Update label
-            self._update_label(final_pos1, final_center, final_pos2)
-            
-            # Trigger button activation callback if provided
-            if hasattr(self, '_button_activation_callback') and self._button_activation_callback:
-                self._button_activation_callback()
-            
+            self._update_label(new_pos1, new_center, new_pos2)
         finally:
             self.line1.blockSignals(False)
             self.line2.blockSignals(False)
             self.center_line.blockSignals(False)
-    
-    def _update_label(self, pos1: float, center: float, pos2: float) -> None:
-        """Update the label widget with current positions."""
-        if self.label_widget:
-            # Use compact labels without axis prefixes
-            # vertical (spectral): left/center/right -> l/c/r
-            # horizontal (spatial): lower/center/upper -> l/c/u
-            if self.orientation == 'vertical':
-                t1, t2, t3 = 'l', 'c', 'r'
-            else:
-                t1, t2, t3 = 'l', 'c', 'u'
-            self.label_widget.setText(
-                f"{t1}: {pos1:.0f}, {t2}: {center:.0f}, {t3}: {pos2:.0f}",
-                size='8pt'
-            )
 
     def create_from_span(self, start: float, end: float) -> None:
         """Convenience to create a region from two positions (mouse drag span)."""

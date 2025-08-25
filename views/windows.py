@@ -44,7 +44,7 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
-        self.hLine = add_line(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 0, moveable=True)
+        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 0, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
@@ -212,7 +212,7 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_spectral_avg)
 
         colors = getWidgetColors()
-        self.vLine = add_line(self.plotItem, colors.get('crosshair_h_spectrum_image', 'white'), 90, moveable=True)
+        self.vLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 90, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))      
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
@@ -527,7 +527,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     def _setup_crosshair(self):
 
         colors = getWidgetColors()
-        self.vLine, self.hLine = add_crosshair(self.plotItem, colors.get('crosshair_v', 'white'), colors.get('crosshair_h_spectrum_image', 'white'))
+        self.vLine, self.hLine = add_crosshair(self.plotItem, colors.get('crosshair', 'white'), colors.get('crosshair', 'white'))
         self.plotItem.scene().sigMouseMoved.connect(self.updateCrosshairAndLabel)
         self.plotItem.scene().sigMouseClicked.connect(self.mouseClicked)
         self.last_valid_crosshair_pos = None

@@ -51,9 +51,8 @@ class ColorSchemes:
         'background': '#19232D',
         'foreground': '#FFFFFF',
         'accent': '#375A7F',
-        'crosshair_v': 'white',
-        'crosshair_h_image': 'dodgerblue',
-        'crosshair_h_spectrum_image': 'white',
+        'crosshair': 'white',
+        'draggable_line': 'orange',
         'averaging_h': 'dodgerblue',
         'averaging_v': 'yellow'
     }
@@ -62,9 +61,8 @@ class ColorSchemes:
         'background': '#FFFFFF',
         'foreground': '#000000',
         'accent': '#0078D4',
-        'crosshair_v': 'black',
-        'crosshair_h_image': 'blue',
-        'crosshair_h_spectrum_image': 'black',
+        'crosshair': 'black',
+        'draggable_line': 'black',
         'averaging_h': 'blue',
         'averaging_v': 'orange'
     }

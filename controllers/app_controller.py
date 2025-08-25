@@ -393,10 +393,12 @@ class Manager:
     """
     
     def __init__(self):
+        """Initialize the data manager with all necessary components."""
         self.dimensionality = DataDimensionality()
         self.rearranger = DataRearranger()
         self.viewer_selector = ViewerSelector()
         self.scaler = DataScaler()
+        self.current_viewers = []  # Track open viewers for potential cleanup
     
     def display_data(self, data: np.ndarray, 
                     *axes: str,
@@ -471,7 +473,13 @@ class Manager:
         viewer_metadata['scale_info'] = scale_info
         
         # Create and return viewer
-        return self._create_viewer(viewer_type, scaled_data, viewer_metadata, **kwargs)
+        viewer = self._create_viewer(viewer_type, scaled_data, viewer_metadata, **kwargs)
+        
+        # Track the viewer for potential cleanup
+        if hasattr(viewer, 'close'):
+            self.current_viewers.append(viewer)
+        
+        return viewer
     
     def get_current_scale_info(self) -> Dict[str, Any]:
         """
@@ -487,6 +495,19 @@ class Manager:
         Reset data scaling to default values.
         """
         self.scaler.reset_scaling()
+    
+    def close_current_viewers(self):
+        """
+        Close all currently tracked viewers.
+        """
+        for viewer in self.current_viewers[:]:
+            try:
+                if hasattr(viewer, 'close'):
+                    viewer.close()
+            except Exception:
+                pass  # Ignore errors during cleanup
+        
+        self.current_viewers.clear()
     
     def _parse_input_args(self, data: np.ndarray, 
                          state_names: Optional[List[str]], 
