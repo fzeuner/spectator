@@ -24,7 +24,7 @@ A modern Python-based data visualization application with advanced features for 
 Spectator is a data viewer designed to replace and extent IDL Z3showred for the analysis and visualization of multi-dimensional spectropolarimetric data. Built with a modern Model-View-Controller (MVC) architecture, it provides interactive visualization capabilities for complex spectral datasets.
 My idea is that you can provide numpy data arrays with up to 5 dimensions, where each dimension is of type "spatial", "spectral", "states" or "time". Depending on the combination of types, my Data manager will chose the correct viewer for you.
 
-![example](docs/example.png)
+![example](docs/viewer.png)
 
 ## Features
 
@@ -94,18 +94,47 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
    - Alternatively, create/update your user-local config at `~/.config/spectator/file_config.json` — this takes precedence over the repo-local file.
    - See the [Configuration](#configuration) section for details and other options.
 
+6. ** (Optional) Create an alias for easy access of z3showred functionality:**
+   ```bash
+   echo "alias z3showred='~/spectator/z3showred.sh'" >> ~/.bashrc
+   source ~/.bashrc
+   # Then simply run: z3showred
+   ```
+
 ## Usage
 
-### Quick Start
+Spectator provides two main usage modes, mimicking the flexibility of the original IDL Z3showred:
 
-**Run the example application:**
+### Mode 1: Standalone Viewer (Direct Data Display)
+
+**Run the standalone viewer example:**
 ```bash
 cd spectator
 conda activate spectator
-python examples/spectator_example.py
+python examples/viewer_example.py
 ```
 
-This will generate synthetic 3D data and display it in the spectator viewer with multiple Stokes states.
+This generates synthetic 3D data and displays it directly in the spectator viewer with multiple Stokes states. Use this mode when you want to programmatically load and display data arrays.
+
+### Mode 2: File Browser Mode (Z3showred-style)
+
+**Run the file browser application:**
+```bash
+cd spectator
+conda activate spectator
+python examples/z3showred_example.py
+# or use the shell script:
+./z3showred.sh
+```
+
+This launches a file browser interface that mimics the original IDL Z3showred workflow, allowing you to browse and select `.dat` files for visualization. The file browser automatically filters for science data and provides an intuitive interface for data exploration.
+
+**For convenience, you can create an alias:**
+```bash
+echo "alias z3showred='~/code/spectator/z3showred.sh'" >> ~/.bashrc
+source ~/.bashrc
+# Then simply run: z3showred
+```
 
 ### Data Loading
 
@@ -239,7 +268,8 @@ spectator/
 │   ├── control_widgets.py    # Controls (limits, toggles, file browser)
 │   └── windows.py            # Main windows (spectrum, image, spatial)
 └── examples/                 # Example scripts
-    └── spectator_example.py
+    ├── viewer_example.py     # Direct data display example
+    └── z3showred_example.py  # File browser mode (IDL Z3showred replacement)
 ```
 
 ### Development Guidelines
