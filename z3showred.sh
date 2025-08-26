@@ -32,6 +32,15 @@ export QT_XCB_NO_XI2=1            # X servers without XInput2 support
 export QT_XCB_GL_INTEGRATION=none # Avoid GLX initialization on headless/Xvfb without GLX
 export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe # Prefer CPU rasterization via llvmpipe
 
+# Bootstrap conda into PATH if missing (no need to activate env)
+if ! command -v conda >/dev/null 2>&1; then
+  if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+    . "$HOME/miniconda3/etc/profile.d/conda.sh"
+  elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+    . "$HOME/anaconda3/etc/profile.d/conda.sh"
+  fi
+fi
+
 # Prefer 'conda run' for reliability across shells
 if command -v conda >/dev/null 2>&1; then
   # Ensure environment exists
