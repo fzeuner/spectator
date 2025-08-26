@@ -159,6 +159,17 @@ class StokesSpatialWindow(BasePlotWidget):
     def _emit_hline_changed(self):
         """Emit signal when horizontal line position changes."""
         self.hLineChanged.emit(self.hLine.value())
+    
+    @QtCore.pyqtSlot(float, float, float, int)
+    def handle_spectral_avg_line_movement(self, x_low: float, x_center: float, x_high: float, source_stokes_index: int):
+        """Handle spectral averaging line movement from spectrum image window."""
+        # Convert x positions to spectral indices
+        x_idx_low = int(np.clip(np.round(x_low), 0, self.full_data.shape[0] - 1))
+        x_idx_center = int(np.clip(np.round(x_center), 0, self.full_data.shape[0] - 1))
+        x_idx_high = int(np.clip(np.round(x_high), 0, self.full_data.shape[0] - 1))
+        
+        # Update spatial data with spectral averaging
+        self.update_spatial_data_wl_avg(x_idx_low, x_idx_center, x_idx_high)
 
     def update_spatial_range(self, min_val, max_val):
         """Updates the spatial (x pixel) axis range of the spatial plot (y-axis)."""

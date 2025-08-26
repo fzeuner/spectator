@@ -143,6 +143,8 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         image_spectra[i].avgRegionChanged.connect(control_widget.handle_v_avg_line_movement)
         if i < len(spectra):
             image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
+        if i < len(spatial):
+            image_spectra[i].avgRegionChanged.connect(spatial[i].handle_spectral_avg_line_movement)
         
         # Connect spatial averaging to control widget for synchronization
         image_spectra[i].spatialAvgRegionChanged.connect(control_widget.handle_spatial_avg_line_movement)
