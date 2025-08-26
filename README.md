@@ -77,6 +77,7 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 
 1. **Create and activate the conda environment:**
    ```bash
+   (optionally: source ~/miniconda3/bin/activate if conda is not in your path)
    conda create -n spectator python=3.12
    conda activate spectator
    ```
@@ -243,7 +244,11 @@ Spectator follows a **Model-View-Controller (MVC)** architecture pattern for mai
 - **Views** (`views/`): UI and plotting widgets
   - `windows.py`: Main windows (spectrum, spectrum image, spatial) and their wiring
   - `base_widgets.py`: Common plotting helpers and base UI pieces
-  - `control_widgets.py`: Controls (limits, toggles, file browser)
+  - `control_widgets.py`: Main control widget imports and exports
+  - `plot_controls.py`: Plot control widget with synchronization management
+  - `line_controls.py`: Line control group (averaging lines, sync toggles)
+  - `spectrum_limits.py`: Spectrum limit controls
+  - `file_controls.py`: File browser and selection controls
 
 - **Controllers** (`controllers/`): Coordination and app entry points
   - `app_controller.py`: `display_data()` entry, data updates, scaling, signal connections
@@ -252,8 +257,10 @@ Spectator follows a **Model-View-Controller (MVC)** architecture pattern for mai
 
 - **Utils** (`utils/`): Shared helpers
   - `averaging_lines.py`: `AveragingLineManager` for spectral/spatial averaging lines
+  - `synchronization.py`: `SynchronizationManager` for crosshair and averaging line sync
   - `plotting.py`: Plot setup, range helpers, histograms, themes
-  - `colors.py`, `Dock.py`, `VerticalLabel.py`: Styling and PyQtGraph overrides
+  - `colors.py`: Color schemes and theme management
+  - `Dock.py`, `VerticalLabel.py`: PyQtGraph widget overrides
 
 ## Development
 
@@ -273,13 +280,18 @@ spectator/
 │   └── file_model.py
 ├── utils/                    # Utilities and helpers
 │   ├── averaging_lines.py    # AveragingLineManager (spectral/spatial lines)
+│   ├── synchronization.py   # SynchronizationManager (crosshair/averaging sync)
 │   ├── plotting.py           # Plot helpers (ranges, axes, histograms)
-│   ├── colors.py
+│   ├── colors.py             # Color schemes and theme management
 │   ├── Dock.py               # PyQtGraph Dock override
 │   └── VerticalLabel.py      # PyQtGraph VerticalLabel override
 ├── views/                    # UI components
-│   ├── base_widgets.py
-│   ├── control_widgets.py    # Controls (limits, toggles, file browser)
+│   ├── base_widgets.py       # Common plotting helpers and base UI pieces
+│   ├── control_widgets.py    # Main control widget imports and exports
+│   ├── plot_controls.py      # Plot control widget with sync management
+│   ├── line_controls.py      # Line controls (averaging, sync toggles)
+│   ├── spectrum_limits.py    # Spectrum limit controls
+│   ├── file_controls.py      # File browser and selection controls
 │   └── windows.py            # Main windows (spectrum, image, spatial)
 └── examples/                 # Example scripts
     ├── viewer_example.py     # Direct data display example
