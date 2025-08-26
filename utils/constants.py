@@ -24,6 +24,10 @@ DEFAULT_N_X = 150
 DEFAULT_LINE_WIDTH = 1.8
 DEFAULT_CROSSHAIR_STYLE = 'DashLine'
 
+# Hover color constants
+HOVER_COLOR_AVERAGING = 'orange'  # Hover color for solid averaging lines
+HOVER_COLOR_DEFAULT = 'red'       # Default hover color for other moveable lines
+
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
 DEFAULT_LABEL_SIZE = '8pt'
@@ -115,6 +119,8 @@ __all__ = [
     'DEFAULT_N_X',
     'DEFAULT_LINE_WIDTH',
     'DEFAULT_CROSSHAIR_STYLE',
+    'HOVER_COLOR_AVERAGING',
+    'HOVER_COLOR_DEFAULT',
     'DEFAULT_FONT_SIZE',
     'DEFAULT_LABEL_SIZE',
     'SUPPORTED_VIEWER_TYPES',

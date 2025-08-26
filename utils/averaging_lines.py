@@ -107,9 +107,9 @@ class AveragingLineManager(QtCore.QObject):
         colors = getWidgetColors()
         color = colors.get(self.color_key, 'yellow')
         
-        self.line1 = add_line(self.plot_item, color, self.angle, pos=pos1, moveable=True, style=QtCore.Qt.SolidLine)
-        self.line2 = add_line(self.plot_item, color, self.angle, pos=pos2, moveable=True, style=QtCore.Qt.SolidLine)
-        self.center_line = add_line(self.plot_item, color, self.angle, pos=center_pos, moveable=True, style=QtCore.Qt.DotLine)
+        self.line1 = add_line(self.plot_item, color, self.angle, pos=pos1, moveable=True, style=QtCore.Qt.SolidLine, is_averaging_line=True)
+        self.line2 = add_line(self.plot_item, color, self.angle, pos=pos2, moveable=True, style=QtCore.Qt.SolidLine, is_averaging_line=True)
+        self.center_line = add_line(self.plot_item, color, self.angle, pos=center_pos, moveable=True, style=QtCore.Qt.DotLine, is_averaging_line=True)
         
         # Connect signals
         self.line1.sigPositionChanged.connect(lambda line: self._update_lines_and_emit(source_line=line))

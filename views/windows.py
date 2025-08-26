@@ -50,6 +50,11 @@ class StokesSpatialWindow(BasePlotWidget):
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         initialize_spectrum_plot_item(self.plotItem, y_label="x", x_label = "", x_units = "", y_units = "pixel")
+        
+        # Use BasePlotWidget methods for standardized axis setup
+        self.setup_standard_axes(left_width=30, top_height=15)
+        self.setup_custom_ticks(spatial_range=len(self.x))
+        self.configure_axis_styling(hide_left_label=True, right_label="x", right_units="pixel")
 
     def _setup_connections(self):
         """Connects signals to slots."""
@@ -163,6 +168,13 @@ class StokesSpatialWindow(BasePlotWidget):
         """Resets the spatial (x pixel) axis range to full range on the spatial plot (y-axis)."""
         reset_plot_wavelength_range(self.plotItem, self.x, axis='y')
     
+    def set_spatial_limits(self, y_min: float, y_max: float):
+        """Set Y-axis limits based on spatial range from SpectrumImageWindow zoom."""
+        try:
+            self.plotItem.setYRange(y_min, y_max, padding=0)
+        except Exception:
+            pass
+    
     @QtCore.pyqtSlot(float)
     @QtCore.pyqtSlot(float, float, int)
     def update_from_spectrum_crosshair(self, xpos_wl: float, ypos_spatial_x: float, source_stokes_index: int):
@@ -186,6 +198,13 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plot_data = self.full_data[spectral_idx, :]
         self.plot_curve.setData(self.plot_data, self.x)
         self._update_label()  # Use consistent label format without λ
+    
+    def set_spectral_limits(self, x_min: float, x_max: float):
+        """Set X-axis limits based on spectral range from SpectrumImageWindow zoom."""
+        try:
+            self.plotItem.setXRange(x_min, x_max, padding=0)
+        except Exception:
+            pass
 
 class StokesSpectrumWindow(BasePlotWidget):
     yRangeChanged = QtCore.pyqtSignal(tuple)  # Emit (min, max)
@@ -218,6 +237,9 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         initialize_spectrum_plot_item(self.plotItem)
+        
+        # Use BasePlotWidget methods for standardized axis setup
+        self.setup_standard_axes(left_width=30, top_height=15)
 
     def _setup_connections(self):
         """Connects signals to slots."""
@@ -280,6 +302,13 @@ class StokesSpectrumWindow(BasePlotWidget):
     def reset_spectral_range(self):
         """Resets the spectral-axis range to the initial maximum range."""
         reset_plot_wavelength_range(self.plotItem, self.spectral, axis='x')
+    
+    def set_spectral_limits(self, x_min: float, x_max: float):
+        """Set X-axis limits based on spectral range from SpectrumImageWindow zoom."""
+        try:
+            self.plotItem.setXRange(x_min, x_max, padding=0)
+        except Exception:
+            pass
 
     def _emit_y_range_changed(self, axis, limits):
         """Emits the current Y-axis range."""
@@ -343,6 +372,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     crosshairMoved = QtCore.pyqtSignal(float, float, int)
     avgRegionChanged = QtCore.pyqtSignal(float, float, float, int)
     spatialAvgRegionChanged = QtCore.pyqtSignal(float, float, float, int)
+    viewRangeChanged = QtCore.pyqtSignal(float, float, float, float) # Emit (x_min, x_max, y_min, y_max) when zoom changes
 
     def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
         super().__init__(None)
@@ -487,6 +517,13 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                 else:
                     # Block right-click completely when no averaging is enabled
                     return True
+            # Block panning: consume middle-button drags entirely
+            elif event.type() == QtCore.QEvent.GraphicsSceneMousePress and event.button() == QtCore.Qt.MiddleButton:
+                return True
+            elif event.type() == QtCore.QEvent.GraphicsSceneMouseMove and getattr(event, 'buttons', lambda: 0)() & QtCore.Qt.MiddleButton:
+                return True
+            elif event.type() == QtCore.QEvent.GraphicsSceneMouseRelease and event.button() == QtCore.Qt.MiddleButton:
+                return True
             elif event.type() == QtCore.QEvent.GraphicsSceneMouseMove and self.right_button_pressed:
                 if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
                     current_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
@@ -519,10 +556,25 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                                 y_label="x", y_units="pixel", 
                                 x_label="λ", x_units="pixel") 
 
-        num_wl_ticks = 8
-        wl_ticks_pix = np.linspace(0, self.n_spectral - 1, num_wl_ticks)
-        wl_ticks = [(tick, f'{tick:.0f}') for tick in wl_ticks_pix]
-        self.plotItem.getAxis('bottom').setTicks([wl_ticks]) # Apply to bottom axis
+        # Use BasePlotWidget methods for standardized axis setup
+        self.setup_standard_axes(left_width=30, top_height=15)
+        self.setup_custom_ticks(spectral_range=self.n_spectral, spatial_range=self.n_x_pixel)
+        self.configure_axis_styling(hide_left_label=True, right_label="x", right_units="pixel")
+        self.setup_viewbox_limits(x_max=self.n_spectral - 1, y_max=self.n_x_pixel - 1, 
+                                 min_range=1.0, enable_rect_zoom=True)
+
+        # Set initial ranges exactly to the image size (no extra padding)
+        try:
+            self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)
+            self.plotItem.setYRange(0, self.n_x_pixel - 1, padding=0)
+        except Exception:
+            pass
+
+        # Connect view range change signal to emit limits for synchronization
+        try:
+            vb.sigRangeChanged.connect(self._on_view_range_changed)
+        except Exception:
+            pass
 
     def _setup_crosshair(self):
 
@@ -589,6 +641,16 @@ class StokesSpectrumImageWindow(BasePlotWidget):
 
         self.spectral_manager.on_region_removed = _on_spectral_removed
         self.spatial_manager.on_region_removed = _on_spatial_removed
+
+    def _on_view_range_changed(self, vb, ranges):
+        """Emit view range changes to synchronize spectrum and spatial window limits."""
+        try:
+            x_range, y_range = ranges
+            x_min, x_max = x_range
+            y_min, y_max = y_range
+            self.viewRangeChanged.emit(float(x_min), float(x_max), float(y_min), float(y_max))
+        except Exception:
+            pass
 
     def mouseClicked(self, event):
         if event.double():
@@ -698,41 +760,15 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     
     def create_default_spectral_averaging(self):
         """Create default spectral averaging lines using the manager."""
-        if hasattr(self, 'spectral_manager'):
-            had_lines_before = self.spectral_manager.has_lines()
-            self.spectral_manager.create_default_lines()
-            # Update legacy references for backward compatibility
-            if self.spectral_manager.has_lines():
-                self.line1 = self.spectral_manager.line1
-                self.line2 = self.spectral_manager.line2
-                self.center_line = self.spectral_manager.center_line
-                
-            # Activate spectral button when averaging is created
-            if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'activate_spectral_button'):
-                self.control_widget.activate_spectral_button()
-            # Notify control widget only if newly created
-            if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'notify_spectral_region_added'):
-                if not had_lines_before and self.spectral_manager.has_lines():
-                    self.control_widget.notify_spectral_region_added()
+        self.spectral_manager.create_default_lines()
+        self.control_widget.activate_spectral_button()
+        self.control_widget.notify_spectral_region_added()
     
     def create_default_spatial_averaging(self):
         """Create default spatial averaging lines using the manager."""
-        if hasattr(self, 'spatial_manager'):
-            had_lines_before = self.spatial_manager.has_lines()
-            self.spatial_manager.create_default_lines()
-            # Update legacy references for backward compatibility
-            if self.spatial_manager.has_lines():
-                self.h_line1 = self.spatial_manager.line1
-                self.h_line2 = self.spatial_manager.line2
-                self.h_center_line = self.spatial_manager.center_line
-                
-            # Activate spatial button when averaging is created
-            if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'activate_spatial_button'):
-                self.control_widget.activate_spatial_button()
-            # Notify control widget only if newly created
-            if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'notify_spatial_region_added'):
-                if not had_lines_before and self.spatial_manager.has_lines():
-                    self.control_widget.notify_spatial_region_added()
+        self.spatial_manager.create_default_lines()
+        self.control_widget.activate_spatial_button()
+        self.control_widget.notify_spatial_region_added()
     
     @QtCore.pyqtSlot(bool)
     def set_spectral_averaging_enabled(self, enabled: bool):
@@ -744,14 +780,12 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     
     def sync_spectral_averaging_lines(self, left_pos: float, center_pos: float, right_pos: float, source_stokes_index: int):
         """Synchronize spectral averaging lines from another window."""
-        if source_stokes_index != self.stokes_index and hasattr(self, 'spectral_manager') and self.spectral_manager.has_lines():
-            # Use the manager's set_positions method which handles clamping internally
+        if source_stokes_index != self.stokes_index and self.spectral_manager.has_lines():
             self.spectral_manager.set_positions(left_pos, center_pos, right_pos, block_signals=True)
     
     def sync_spatial_averaging_lines(self, lower_pos: float, center_pos: float, upper_pos: float, source_stokes_index: int):
         """Synchronize spatial averaging lines from another window."""
-        if source_stokes_index != self.stokes_index and hasattr(self, 'spatial_manager') and self.spatial_manager.has_lines():
-            # Use the manager's set_positions method which handles clamping internally
+        if source_stokes_index != self.stokes_index and self.spatial_manager.has_lines():
             self.spatial_manager.set_positions(lower_pos, center_pos, upper_pos, block_signals=True)
     
     def _activate_spectral_button(self):

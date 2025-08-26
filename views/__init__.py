@@ -11,7 +11,7 @@ from .base_widgets import BasePlotWidget, BaseControlWidget, BaseImageWidget, Cu
 
 # Control widgets
 from .control_widgets import (
-    LinesControlGroup, SpectrumLimitControlGroup, PlotControlWidget
+    LinesControlGroup, SpectrumLimitControlGroup, PlotControlWidget, FilesControlWidget
 )
 
 __all__ = [
@@ -26,5 +26,6 @@ __all__ = [
     # Control widgets
     'LinesControlGroup',
     'SpectrumLimitControlGroup',
-    'PlotControlWidget'
+    'PlotControlWidget',
+    'FilesControlWidget'
 ]

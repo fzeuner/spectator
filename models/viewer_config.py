@@ -247,7 +247,6 @@ class ViewerSettings:
         return settings
 
 
-# Convenience functions for backward compatibility
 def get_default_crosshair_colors() -> Dict[str, str]:
     """Get default crosshair colors."""
     return ViewerSettings().get_crosshair_colors()

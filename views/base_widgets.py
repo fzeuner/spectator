@@ -179,6 +179,95 @@ class BasePlotWidget(QtWidgets.QWidget):
             self.plotItem.setXRange(x_range[0], x_range[1], padding=padding)
         if y_range:
             self.plotItem.setYRange(y_range[0], y_range[1], padding=padding)
+    
+    def setup_standard_axes(self, left_width: int = 30, top_height: int = 15):
+        """
+        Setup standard axis dimensions and visibility.
+        
+        Args:
+            left_width: Width of left axis in pixels
+            top_height: Height of top axis in pixels
+        """
+        # Configure axis visibility
+        self.plotItem.showAxes(True, showValues=(True, True, False, False))
+        
+        # Set individual axis dimensions for precise control
+        self.plotItem.getAxis('top').setHeight(top_height)
+        self.plotItem.getAxis('left').setWidth(left_width)
+    
+    def setup_custom_ticks(self, spectral_range: Optional[int] = None, spatial_range: Optional[int] = None,
+                          num_spectral_ticks: int = 8, num_spatial_ticks: int = 6):
+        """
+        Setup custom tick marks for spectral and spatial axes.
+        
+        Args:
+            spectral_range: Maximum spectral index (for bottom axis)
+            spatial_range: Maximum spatial index (for left axis)
+            num_spectral_ticks: Number of spectral tick marks
+            num_spatial_ticks: Number of spatial tick marks
+        """
+        if spectral_range is not None:
+            spectral_ticks_pix = np.linspace(0, spectral_range - 1, num_spectral_ticks)
+            spectral_ticks = [(tick, f'{tick:.0f}') for tick in spectral_ticks_pix]
+            self.plotItem.getAxis('bottom').setTicks([spectral_ticks])
+        
+        if spatial_range is not None:
+            spatial_ticks_pix = np.linspace(0, spatial_range - 1, num_spatial_ticks)
+            spatial_ticks = [(tick, f'{tick:.0f}') for tick in spatial_ticks_pix]
+            self.plotItem.getAxis('left').setTicks([spatial_ticks])
+    
+    def configure_axis_styling(self, hide_left_label: bool = True, right_label: str = "x", 
+                              right_units: str = "pixel"):
+        """
+        Configure standard axis styling patterns.
+        
+        Args:
+            hide_left_label: Whether to hide the left axis label
+            right_label: Label text for right axis
+            right_units: Units for right axis
+        """
+        # Configure left axis styling
+        left_axis = self.plotItem.getAxis('left')
+        if hide_left_label:
+            left_axis.showLabel(False)
+        left_axis.setStyle(showValues=True)
+        left_axis.enableAutoSIPrefix(False)
+        
+        # Configure right axis label
+        right_axis = self.plotItem.getAxis('right')
+        right_axis.setLabel(text=right_label, units=right_units)
+    
+    def setup_viewbox_limits(self, x_max: float, y_max: float, 
+                           min_range: float = 1.0, enable_rect_zoom: bool = False):
+        """
+        Setup standard viewbox limits and interaction modes.
+        
+        Args:
+            x_max: Maximum x value for limits
+            y_max: Maximum y value for limits  
+            min_range: Minimum zoom range
+            enable_rect_zoom: Whether to enable rectangle zoom mode
+        """
+        vb = self.plotItem.vb
+        
+        if enable_rect_zoom:
+            try:
+                # Enable rectangle-zoom mode for left-drag
+                vb.setMouseMode(pg.ViewBox.RectMode)
+            except Exception:
+                pass
+        
+        # Set viewbox limits to constrain zoom and pan
+        try:
+            vb.setLimits(
+                xMin=0, xMax=float(x_max),
+                yMin=0, yMax=float(y_max),
+                minXRange=min_range, minYRange=min_range,
+                maxXRange=float(x_max + 1),
+                maxYRange=float(y_max + 1)
+            )
+        except Exception:
+            pass
 
 
 class BaseControlWidget(QtWidgets.QGroupBox):

@@ -144,6 +144,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         if i < len(spectra):
             image_spectra[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
         
+        # Connect spatial averaging to control widget for synchronization
+        image_spectra[i].spatialAvgRegionChanged.connect(control_widget.handle_spatial_avg_line_movement)
+        
         # Connect spectral averaging control signal
         control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra[i].set_spectral_averaging_enabled)
         
@@ -193,6 +196,17 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
             control_widget.lines_content_widget.toggleAvgXRemove.connect(spatial[i].clear_averaging_regions)
             # Note: Removed feedback connection from spatial horizontal line to spectrum image crosshair
             # to prevent unwanted feedback when moving the spatial window horizontal line
+            
+            # Connect zoom synchronization: spectrum image view changes update spatial window limits
+            image_spectra[i].viewRangeChanged.connect(
+                lambda x_min, x_max, y_min, y_max, spatial_win=spatial[i]: spatial_win.set_spatial_limits(y_min, y_max)
+            )
+        
+        # Connect zoom synchronization: spectrum image view changes update spectrum window limits
+        if i < len(spectra):
+            image_spectra[i].viewRangeChanged.connect(
+                lambda x_min, x_max, y_min, y_max, spectrum_win=spectra[i]: spectrum_win.set_spectral_limits(x_min, x_max)
+            )
     
     # Connect the xlamRangeChanged signal 
 
@@ -212,6 +226,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     for spatial_widget in spatial:
         control_widget.spatialRangeChanged.connect(spatial_widget.update_spatial_range)
         control_widget.resetSpatialRangeRequested.connect(spatial_widget.reset_spatial_range)
+
+    # Set widget collections for synchronization
+    control_widget.set_widget_collections(image_spectra, spectra, spatial)
 
     # --- Show Window and Run App ---
     win.show()

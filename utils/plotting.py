@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import Tuple, Optional
 
-from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes
+from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
 from .colors import getWidgetColors
 
 
@@ -19,7 +19,8 @@ def add_line(plot_item: pg.PlotItem,
              angle: float, 
              moveable: bool = False, 
              pos: float = 0, 
-             style=QtCore.Qt.SolidLine) -> pg.InfiniteLine:
+             style=QtCore.Qt.SolidLine,
+             is_averaging_line: bool = False) -> pg.InfiniteLine:
     """
     Add an InfiniteLine to a PlotItem.
     
@@ -30,12 +31,24 @@ def add_line(plot_item: pg.PlotItem,
         moveable: Whether line can be moved by user
         pos: Initial position
         style: Line style (Qt pen style)
+        is_averaging_line: Whether this is an averaging line (affects hover color)
         
     Returns:
         The created InfiniteLine object
     """
     line = pg.InfiniteLine(pos=pos, angle=angle, movable=moveable)
     line.setPen(color, width=DEFAULT_LINE_WIDTH, style=style)
+    
+    # Set custom hover pen based on line type
+    if moveable:
+        if is_averaging_line and style == QtCore.Qt.SolidLine:
+            # Orange hover for solid averaging lines only
+            hover_pen = pg.mkPen(color=HOVER_COLOR_AVERAGING, width=DEFAULT_LINE_WIDTH + 1, style=style)
+        else:
+            # Red hover for other moveable lines (default PyQtGraph behavior)
+            hover_pen = pg.mkPen(color=HOVER_COLOR_DEFAULT, width=DEFAULT_LINE_WIDTH + 1, style=style)
+        line.setHoverPen(hover_pen)
+    
     plot_item.addItem(line, ignoreBounds=True)
     return line
 
@@ -152,36 +165,32 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
                 
                 # Use state-specific scaling if stokes_index is provided
                 if stokes_index is not None:
-                    # Try to get the specific label for this state
-                    if labels and stokes_index in labels and labels[stokes_index]:
-                        # Only use the label if it's not empty
-                        label_text = labels[stokes_index]
-                    elif factors and stokes_index in factors:
-                        # Create label from factor for this specific state
+                    # Always calculate from factors to show 1/factor (units), ignore pre-existing labels
+                    if factors and stokes_index in factors:
+                        # Create label from 1/factor for this specific state (to show units)
                         factor = factors[stokes_index]
                         if factor == 1.0:
                             label_text = "1"
                         else:
-                            # Convert factor to scientific notation label
-                            exponent = int(np.log10(abs(factor))) if factor != 0 else 0
+                            # Convert 1/factor to scientific notation label
+                            inverse_factor = 1.0 / factor
+                            exponent = int(np.log10(abs(inverse_factor))) if inverse_factor != 0 else 0
                             if exponent != 0:
                                 label_text = f"10^{exponent}"
                             else:
                                 label_text = "1"
                     # If no scaling info for this state, label_text remains "1"
                 else:
-                    # No stokes_index provided, use first available or default behavior
-                    if labels:
-                        # Get the first available non-empty scale label
-                        label_text = next((label for label in labels.values() if label), "1")
-                    elif factors:
-                        # If we have factors but no labels, create a simple label
+                    # No stokes_index provided, always calculate from factors to show 1/factor (units)
+                    if factors:
+                        # Create a simple label from 1/factor, ignore pre-existing labels
                         first_factor = next(iter(factors.values()), 1.0)
                         if first_factor == 1.0:
                             label_text = "1"
                         else:
-                            # Convert factor to scientific notation label
-                            exponent = int(np.log10(abs(first_factor))) if first_factor != 0 else 0
+                            # Convert 1/factor to scientific notation label
+                            inverse_factor = 1.0 / first_factor
+                            exponent = int(np.log10(abs(inverse_factor))) if inverse_factor != 0 else 0
                             if exponent != 0:
                                 label_text = f"10^{exponent}"
                             else:
@@ -237,15 +246,19 @@ def initialize_image_plot_item(item: pg.PlotItem,
         axis = item.getAxis(axis_name)
         axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
         if axis_name == 'left':
-            axis.setWidth(42)
+            axis.setWidth(30)
         else:  # 'bottom' and 'top'
             axis.setHeight(15)
 
     item.setLabel("bottom", text=x_label, units=x_units)
     item.setLabel("left", text=y_label, units=y_units)
 
-    # Show axes with tick values on left and top only
-    item.showAxes(True, showValues=(y_values, True, False, False), size=15)
+    # Show axes with tick values on left and top only - no size parameter
+    item.showAxes(True, showValues=(y_values, True, False, False))
+    
+    # Set individual axis dimensions for precise control
+    item.getAxis('top').setHeight(15)
+    item.getAxis('left').setWidth(30)
     item.setDefaultPadding(0.0)
     item.invertY(False)
 
@@ -270,15 +283,19 @@ def initialize_spectrum_plot_item(plot: pg.PlotItem,
         axis = plot.getAxis(axis_name)
         axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
         if axis_name == 'left':
-            axis.setWidth(42)
+            axis.setWidth(30)
         else:  # 'bottom' and 'top'
             axis.setHeight(15)
 
     plot.setLabel("bottom", text=x_label, units=x_units)
     plot.setLabel("left", text=y_label, units=y_units)
 
-    # Show axes with tick values on left and top only
-    plot.showAxes(True, showValues=(True, True, False, False), size=15)
+    # Show axes with tick values on left and top only - no size parameter
+    plot.showAxes(True, showValues=(True, True, False, False))
+    
+    # Set individual axis dimensions for precise control
+    plot.getAxis('top').setHeight(15)
+    plot.getAxis('left').setWidth(30)
     plot.setDefaultPadding(0.0)
 
 

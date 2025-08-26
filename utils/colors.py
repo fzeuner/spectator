@@ -9,22 +9,17 @@ from typing import Dict
 from .constants import ColorSchemes
 
 
-# Legacy compatibility function (replaces getWidgetColors functionality)
-def getWidgetColors(theme: str = 'dark') -> Dict[str, str]:
-    """
-    Get widget colors for backward compatibility.
-    
-    Args:
-        theme: Theme name
-        
-    Returns:
-        Dictionary of color mappings
-    """
+def get_widget_colors(theme: str = 'dark') -> Dict[str, str]:
+    """Get widget colors for the specified theme."""
     color_schemes = {
         'dark': ColorSchemes.DARK_THEME,
         'light': ColorSchemes.LIGHT_THEME
     }
     return color_schemes.get(theme, color_schemes['dark'])
+
+def getWidgetColors(theme: str = 'dark') -> Dict[str, str]:
+    """Get widget colors for the specified theme."""
+    return get_widget_colors(theme)
 
 
 # Export commonly used functions
