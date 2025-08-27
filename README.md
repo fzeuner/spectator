@@ -34,7 +34,7 @@ A modern Python-based data visualization application with advanced features for 
 ## About
 
 Spectator is a data viewer designed to replace and extent IDL Z3showred for the analysis and visualization of multi-dimensional spectropolarimetric data. Built with a modern Model-View-Controller (MVC) architecture, it provides interactive visualization capabilities for complex spectral datasets.
-My idea is that you can provide numpy data arrays with up to 5 dimensions, where each dimension is of type "spatial", "spectral", "states" or "time". Depending on the combination of types, my Data manager will chose the correct viewer for you.
+My idea is that you can provide numpy data arrays with up to 5 dimensions, where each dimension is of type "spatial", "spectral", "states" or "time". Depending on the combination of types, my Data manager will chose the correct viewer for you. THIS IS NOT FULLY WORKING YET, but it should work for 3D data with spectral, spatial and states dimensions.
 
 ![example](docs/viewer.png)
 
