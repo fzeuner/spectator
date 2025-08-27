@@ -75,53 +75,53 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     spatial: List[Any] = []
     docks: Dict[str, Dict[str, Dock]] = {"spectrum": {}, "spec_img": {}, "spatial": {}} # Store docks by type and name
 
-     # --- Create Widgets and Docks in a Loop ---
+    # --- Create Widgets and Docks in a Loop ---
     for i, name in enumerate(STOKES_NAMES):
-         base_name = name # dock names
-         stokes_data_y_wl_x = data[i, :, :] # Shape ( wl, x)
+        base_name = name # dock names
+        stokes_data_y_wl_x = data[i, :, :] # Shape ( wl, x)
 
-         # Create Widgets for this Stokes parameter
-         initial_spec_img_data = data[i, :, :] 
+        # Create Widgets for this Stokes parameter
+        initial_spec_img_data = data[i, :, :] 
 
-         win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
-         win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
-         win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
+        win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
+        win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
+        win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
 
-         # Append to lists
-         spectra.append(win_spectrum)
-         image_spectra.append(win_image_spectrum)
-         spatial.append(win_spatial)
+        # Append to lists
+        spectra.append(win_spectrum)
+        image_spectra.append(win_image_spectrum)
+        spatial.append(win_spatial)
          
-         # Initialize spectrum window profile from the image window's current horizontal crosshair (x position)
-         try:
-             if hasattr(win_image_spectrum, 'hLine'):
-                 x_pos = float(win_image_spectrum.hLine.value())
-                 n_x = win_spectrum.full_data.shape[1]
-                 x_idx = int(np.clip(np.round(x_pos), 0, n_x - 1))
-                 win_spectrum.update_spectrum_data(x_idx)
-         except Exception as e:
-             print(f"Warning: could not initialize spectrum window from crosshair: {e}")
+        # Initialize spectrum window profile from the image window's current horizontal crosshair (x position)
+        try:
+            if hasattr(win_image_spectrum, 'hLine'):
+                x_pos = float(win_image_spectrum.hLine.value())
+                n_x = win_spectrum.full_data.shape[1]
+                x_idx = int(np.clip(np.round(x_pos), 0, n_x - 1))
+                win_spectrum.update_spectrum_data(x_idx)
+        except Exception as e:
+            print(f"Warning: could not initialize spectrum window from crosshair: {e}")
 
-         # Create Docks
-         spectrum_dock = Dock(f"{base_name} spectrum", size=(350, 150))
-         spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(350, 150))
-         spatial_dock = Dock(f"{base_name} spatial", size=(250, 150))
+        # Create Docks (spectrum clearly wider than spatial)
+        spectrum_dock = Dock(f"{base_name} spectrum", size=(600, 260))
+        spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(800, 540))
+        spatial_dock = Dock(f"{base_name} spatial", size=(360, 240))
 
-         # Add Widgets to Docks
-         spectrum_dock.addWidget(win_spectrum)
-         spectrum_image_dock.addWidget(win_image_spectrum)
-         spatial_dock.addWidget(win_spatial)
+        # Add Widgets to Docks
+        spectrum_dock.addWidget(win_spectrum)
+        spectrum_image_dock.addWidget(win_image_spectrum)
+        spatial_dock.addWidget(win_spatial)
 
-         # Store Docks
-         docks["spectrum"][base_name] = spectrum_dock
-         docks["spec_img"][base_name] = spectrum_image_dock
-         docks["spatial"][base_name] = spatial_dock
+        # Store Docks
+        docks["spectrum"][base_name] = spectrum_dock
+        docks["spec_img"][base_name] = spectrum_image_dock
+        docks["spatial"][base_name] = spatial_dock
 
     # Update control widget with the created image and spectrum widgets
     control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial) # Now initialize UI for limits
        
     # --- Create Control Dock ---
-    control_dock = Dock("Control", size=(CONTROL_PANEL_SIZE[0], CONTROL_PANEL_SIZE[1]))
+    control_dock = Dock("Control", size=(int(CONTROL_PANEL_SIZE[0] * 1.5), CONTROL_PANEL_SIZE[1]))
     
     # --- Arrange Docks in the DockArea ---
     
@@ -143,9 +143,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     area.addDock(control_dock, 'right')
 
     # Control widget
-    # Ensure control panel has a reasonable minimum width
+    # Ensure control panel has a reasonable minimum width (~1.5x)
     try:
-        control_widget.setMinimumWidth(CONTROL_PANEL_SIZE[0])
+        control_widget.setMinimumWidth(int(CONTROL_PANEL_SIZE[0] * 1.5))
     except Exception:
         pass
     control_dock.addWidget(control_widget)
