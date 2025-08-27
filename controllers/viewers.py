@@ -180,9 +180,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
                     control_widget.lines_content_widget.notify_spatial_region_removed()
             image_spectra[i].spatial_manager.on_region_removed = _on_spat_removed
         
-        # Averaging line synchronization is handled via window-level signals
-        # avgRegionChanged and spatialAvgRegionChanged above. Avoid connecting
-        # manager.regionChanged here to prevent duplicate handler calls.
+
         
         # Also allow clearing spatial avg from spectrum window
         if i < len(spectra):
@@ -231,6 +229,11 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     control_widget.set_widget_collections(image_spectra, spectra, spatial)
 
     # --- Show Window and Run App ---
+    # Ensure normal window state (avoid accidental maximize/fullscreen under Xvfb)
+    try:
+        win.showNormal()
+    except Exception:
+        pass
     win.show()
     try:
         # Use environment variable or default to dark style

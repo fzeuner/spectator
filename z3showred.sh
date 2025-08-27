@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Spectator in the 'spectator' conda environment
 # Usage:
-#   ./run_spectator.sh
+#   ./z3showred.sh
 # Always runs: examples/z3showred_example.py
 
 set -euo pipefail
@@ -49,8 +49,10 @@ if command -v conda >/dev/null 2>&1; then
     RUNNER_PREFIX=()
     if [[ -z "${DISPLAY:-}" ]]; then
       if command -v xvfb-run >/dev/null 2>&1; then
-        echo "[info] DISPLAY not set -> using xvfb-run" >&2
-        RUNNER_PREFIX=(xvfb-run -a -s "-screen 0 1920x1080x24")
+        # Allow overriding virtual screen size via SPECTATOR_SCREEN, default to smaller geometry
+        SCREEN_SPEC="${SPECTATOR_SCREEN:-1280x800x24}"
+        echo "[info] DISPLAY not set -> using xvfb-run with screen ${SCREEN_SPEC}" >&2
+        RUNNER_PREFIX=(xvfb-run -a -s "-screen 0 ${SCREEN_SPEC}")
       else
         echo "[warn] DISPLAY not set and xvfb-run not found; continuing without X server (may fail)" >&2
       fi
