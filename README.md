@@ -61,7 +61,6 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 - installation simplification with pyinstaller?
 - support more different types of data (e.g., 2D spectral/spatial, spatial/time, spectral/time, 3D, 4D, etc...)
 - improve memory efficiency for large data sets
-- should zooming and panning also be synchronizable?
 - how to make a monkey patch for the pyqtrgaph widgets Dock and VerticalLabel?
 - .fits file loading
 - add other viewers 
