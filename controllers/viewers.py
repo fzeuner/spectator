@@ -4,7 +4,7 @@ from pyqtgraph.Qt import QtWidgets
 import qdarkstyle
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
-from utils.constants import CONTROL_PANEL_SIZE
+from utils.constants import CONTROL_PANEL_SIZE, get_initial_window_size
 from typing import List, Dict, Any 
  
 
@@ -17,7 +17,7 @@ from views import (
     PlotControlWidget
 )
 from views.windows import (
-    StokesSpectrumWindow, StokesSpectrumImageWindow, StokesSpatialWindow
+    StokesSpectrumWindow, StokesSpectrumImageWindow, StokesSpatialWindow, StokesImageWindow
 )
  
 # --- Main Application Setup for 3D data ---
@@ -40,23 +40,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     win = QtWidgets.QMainWindow()
     area = DockArea()
     win.setCentralWidget(area)
-    # Adaptive initial size: env override -> 80% of screen -> fallback
-    try:
-        spec_window = os.environ.get('SPECTATOR_WINDOW', '').lower()
-        if 'x' in spec_window:
-            sw, sh = spec_window.split('x')[:2]
-            w, h = int(sw), int(sh)
-        else:
-            screen = app.primaryScreen()
-            if screen is not None:
-                geo = screen.availableGeometry()
-                w = max(600, int(geo.width() * 0.8))
-                h = max(400, int(geo.height() * 0.8))
-            else:
-                w, h = 1280, 800
-        win.resize(w, h)
-    except Exception:
-        win.resize(1280, 800)
+    # Centralized initial size
+    w, h = get_initial_window_size(app, env_var='SPECTATOR_WINDOW')
+    win.resize(w, h)
     win.setWindowTitle(title)
     
     # --- Generate state names ---
@@ -77,15 +63,13 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
     # --- Create Widgets and Docks in a Loop ---
     for i, name in enumerate(STOKES_NAMES):
-        base_name = name # dock names
-        stokes_data_y_wl_x = data[i, :, :] # Shape ( wl, x)
+        base_name = name  # dock names
+        stokes_data_wl_x = data[i, :, :]  # Per-state 2D data: shape (wl, x)
 
-        # Create Widgets for this Stokes parameter
-        initial_spec_img_data = data[i, :, :] 
-
-        win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
-        win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
-        win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
+        # Create Widgets for this Stokes parameter (all consume (wl, x))
+        win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_spatial = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
 
         # Append to lists
         spectra.append(win_spectrum)
@@ -126,7 +110,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     # --- Arrange Docks in the DockArea ---
     
     for i, name in enumerate(STOKES_NAMES):
-        base_name = name.split('/')[0]
+        base_name = name
         if name == STOKES_NAMES[0]: # first one always on the left
             area.addDock(docks["spec_img"][base_name], 'left')
         else:
@@ -135,7 +119,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     # Middle Column: Spectrum Images and Spectra
  
     for i, name in enumerate(STOKES_NAMES):
-         base_name = name.split('/')[0]
+         base_name = name
          # Add spectrum and spatial
          area.addDock(docks["spectrum"][base_name], 'right', docks["spec_img"][base_name])
          area.addDock(docks["spatial"][base_name], 'right', docks["spectrum"][base_name])
@@ -261,6 +245,127 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         print(f"Could not apply qdarkstyle: {e}")
 
     # If we created the QApplication here, start the event loop; otherwise, return window for embedding
+    if created_app:
+        app.exec_()
+        return None
+    else:
+        return win
+
+
+# --- 4D Scan Viewer: states, spatial, spectral, spatial ---
+
+def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[str] = None):
+    """
+    Expected overall data shape: (states, spatial_y, spectral, spatial_x)
+    """
+    # Use existing QApplication if present, otherwise create one
+    app = QtWidgets.QApplication.instance()
+    created_app = False
+    if app is None:
+        app = pg.mkQApp(title)
+        created_app = True
+    win = QtWidgets.QMainWindow()
+    area = DockArea()
+    win.setCentralWidget(area)
+    # Centralized window size (uses same policy as spectator) with env override
+    w, h = get_initial_window_size(app, env_var='SPECTATOR_WINDOW')
+    win.resize(w, h)
+    win.setWindowTitle(title)
+
+    # --- State names ---
+    if state_names is None:
+        STOKES_NAMES = [str(i+1) for i in range(data.shape[0])]
+    else:
+        STOKES_NAMES = state_names
+
+    # --- Widgets ---
+    control_widget = PlotControlWidget()
+
+    scan_images: List[Any] = []
+    spectra: List[Any] = []
+    image_spectra: List[Any] = []
+    spatial: List[Any] = []
+    docks: Dict[str, Dict[str, Dock]] = {"scan": {}, "spectrum": {}, "spec_img": {}, "spatial": {}}
+
+    # Data is expected as (states, spatial_y, spectral, spatial_x)
+    n_states = data.shape[0]
+    for i in range(n_states):
+        base_name = STOKES_NAMES[i]
+        # For each state, we will display a spectrum image (spectral vs spatial_x) at a given spatial_y index.
+        state_data = data[i]
+        # Shapes: spatial_y, spectral, spatial_x
+        if state_data.ndim != 3:
+            raise ValueError(f"scan_viewer expects per-state 3D data (y, spectral, x); got shape {state_data.shape}")
+
+        stokes_data_wl_x = state_data[0, :, :]  # (spectral, x)
+        
+
+        # Windows
+        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_spatial = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_scan = StokesImageWindow(state_data, stokes_index=i, name=base_name)
+
+        image_spectra.append(win_image_spectrum)
+        spectra.append(win_spectrum)
+        spatial.append(win_spatial)
+        scan_images.append(win_scan)
+
+        # Initialize spectrum from image_spectrum hLine (spatial x)
+        try:
+            if hasattr(win_image_spectrum, 'hLine'):
+                x_pos = float(win_image_spectrum.hLine.value())
+                n_x = stokes_data_wl_x.shape[1]
+                x_idx = int(np.clip(np.round(x_pos), 0, n_x - 1))
+                win_spectrum.update_spectrum_data(x_idx)
+        except Exception:
+            pass
+
+        # Docks
+        spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(800, 540))
+        spatial_dock = Dock(f"{base_name} scan", size=(360, 240))
+        spectrum_dock = Dock(f"{base_name} spectrum", size=(800, 240))
+        scan_dock = Dock(f"{base_name} scan", size=(800, 540))
+
+        spectrum_image_dock.addWidget(win_image_spectrum)
+        spatial_dock.addWidget(win_spatial)
+        spectrum_dock.addWidget(win_spectrum)
+        scan_dock.addWidget(win_scan)
+
+        docks["spec_img"][base_name] = spectrum_image_dock
+        docks["spatial"][base_name] = spatial_dock
+        docks["spectrum"][base_name] = spectrum_dock
+        docks["scan"][base_name] = scan_dock
+
+    # Arrange docks
+    for i, name in enumerate(STOKES_NAMES):
+        base_name = name.split('/')[0]
+        if i == 0:
+            area.addDock(docks["scan"][base_name], 'left')
+        else:
+            area.addDock(docks["scan"][base_name], 'bottom', docks["scan"][STOKES_NAMES[i-1].split('/')[0]])
+      
+    # Middle Column: Spectrum Images
+ 
+    for i, name in enumerate(STOKES_NAMES):
+         base_name = name
+         # Add spectrum and spatial
+         area.addDock(docks["spec_img"][base_name], 'right', docks["scan"][base_name])
+         area.addDock(docks["spectrum"][base_name], 'right', docks["spec_img"][base_name])
+         area.addDock(docks["spatial"][base_name], 'bottom', docks["spectrum"][base_name])
+
+      # Show and style
+    try:
+        win.showNormal()
+    except Exception:
+        pass
+    win.show()
+    try:
+        dark_stylesheet = qdarkstyle.load_stylesheet_from_environment(is_pyqtgraph=True)
+        app.setStyleSheet(dark_stylesheet)
+    except Exception:
+        pass
+
     if created_app:
         app.exec_()
         return None

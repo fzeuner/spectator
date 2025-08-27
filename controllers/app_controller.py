@@ -187,23 +187,33 @@ class DataRearranger:
         return target_order
     
     def _arrange_4d(self, input_axes: List[AxisType]) -> List[AxisType]:
-        """Arrange 4D data."""
-        # Standard 4D: states, spectral, spatial, spatial
-        if AxisType.STATES in input_axes:
-            target_order = [AxisType.STATES]
-            remaining_axes = input_axes.copy()
+        """Arrange 4D data.
+
+        For scan viewer, we target: states, spatial, spectral, spatial
+        """
+        target_order: List[AxisType] = []
+        remaining_axes = input_axes.copy()
+        # Start with states if present
+        if AxisType.STATES in remaining_axes:
+            target_order.append(AxisType.STATES)
             remaining_axes.remove(AxisType.STATES)
-        else:
-            target_order = []
-            remaining_axes = input_axes.copy()
-        
-        # Add in priority order
-        priority = [AxisType.SPECTRAL, AxisType.SPATIAL, AxisType.TIME]
-        for axis_type in priority:
-            while axis_type in remaining_axes:
-                target_order.append(axis_type)
-                remaining_axes.remove(axis_type)
-        
+        # Then the first spatial, then spectral, then any remaining spatial, then time if present
+        if AxisType.SPATIAL in remaining_axes:
+            target_order.append(AxisType.SPATIAL)
+            remaining_axes.remove(AxisType.SPATIAL)
+        if AxisType.SPECTRAL in remaining_axes:
+            target_order.append(AxisType.SPECTRAL)
+            remaining_axes.remove(AxisType.SPECTRAL)
+        # Add any remaining spatial
+        while AxisType.SPATIAL in remaining_axes:
+            target_order.append(AxisType.SPATIAL)
+            remaining_axes.remove(AxisType.SPATIAL)
+        # Finally, time if present
+        if AxisType.TIME in remaining_axes:
+            target_order.append(AxisType.TIME)
+            remaining_axes.remove(AxisType.TIME)
+        # Append any other leftover axes to preserve input
+        target_order.extend(remaining_axes)
         return target_order
 
 class ViewerSelector:
@@ -231,6 +241,14 @@ class ViewerSelector:
             Viewer type identifier
         """
         ndim = len(data_shape)
+        
+        # Special-case 4D scan viewer: states, spatial, spectral, spatial
+        if ndim == 4:
+            if (len(axes) == 4 and axes[0] == AxisType.STATES and 
+                axes[1] == AxisType.SPATIAL and axes[2] == AxisType.SPECTRAL and axes[3] == AxisType.SPATIAL):
+                return "scan_viewer"
+            # Fallback generic 4D
+            return self.viewer_types.get(4, "plot_4d")
         
         if ndim in self.viewer_types:
             return self.viewer_types[ndim]
@@ -595,7 +613,19 @@ class Manager:
                 return spectator(data, title=metadata['title'], state_names=state_names)
             else:
                 raise NotImplementedError(f"3D viewer for axis configuration {metadata['axes']} not yet implemented")
-        
+        elif viewer_type == "scan_viewer":
+            from controllers.viewers import scan_viewer
+            # Expect axes order: states (0), spatial (1), spectral (2), spatial (3)
+            if (len(data.shape) == 4 and 
+                metadata.get('states_axis') == 0 and 
+                1 in metadata.get('spatial_axes', []) and 
+                metadata.get('spectral_axis') == 2 and 
+                3 in metadata.get('spatial_axes', [])):
+                state_names = metadata.get('states_info', {}).get('names', None)
+                return scan_viewer(data, title=metadata['title'], state_names=state_names)
+            else:
+                raise NotImplementedError(f"4D scan viewer requires axes [states, spatial, spectral, spatial]; got {metadata['axes']}")
+
         else:
             # Placeholder for other viewer types
             print(f"Viewer type '{viewer_type}' not yet implemented.")

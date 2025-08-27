@@ -808,3 +808,141 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         """Helper method to activate spatial averaging button."""
         if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'activate_spatial_button'):
             self.control_widget.activate_spatial_button()
+
+class StokesImageWindow(BasePlotWidget):
+    """Displays a scan image (spatial_y vs spatial_x) for a selected wavelength.
+
+    Input data shape: (y, λ, x). This widget does not directly reference other windows.
+    It exposes a method to set the wavelength index and emits crosshair movement signals.
+    """
+
+    crosshairMoved = QtCore.pyqtSignal(float, float, int)  # x, y, stokes_index
+
+    def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
+        super().__init__(None)
+
+        self.name = name + " scan"
+        self.stokes_index = stokes_index
+        self.full_data = data  # (y, λ, x)
+        if self.full_data.ndim != 3:
+            raise ValueError(f"StokesImageWindow expects 3D data (y, λ, x); got shape {self.full_data.shape}")
+
+        self.n_y, self.n_wl, self.n_x = self.full_data.shape
+        self.y_pixels = np.arange(self.n_y)
+        self.x_pixels = np.arange(self.n_x)
+        self.current_wl_idx = self.n_wl // 2 if self.n_wl > 0 else 0  # dummy selector default
+        self.scale_info = scale_info
+
+        self._setup_image_plot()
+        self._setup_axes()
+        self._setup_crosshair()
+
+    def _slice_image(self) -> np.ndarray:
+        """Return image slice for current wavelength as (y, x)."""
+        # Respect pyqtgraph imageAxisOrder like other windows
+        img = self.full_data[:, self.current_wl_idx, :]
+        axis_order = pg.getConfigOption('imageAxisOrder')
+        if axis_order == 'row-major':
+            # ImageItem expects (rows=y, cols=x); data already (y,x)
+            return img
+        else:
+            # col-major expects (x,y)
+            return img.T
+
+    def _setup_image_plot(self):
+        self.image_item = pg.ImageItem()
+        self.plotItem.addItem(self.image_item)
+        self.histogram = create_histogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
+        self.image_item.setImage(self._slice_image())
+
+        # Set image rect to exact pixel extents
+        x_min, x_max = 0, self.n_x - 1 if self.n_x > 0 else 0
+        y_min, y_max = 0, self.n_y - 1 if self.n_y > 0 else 0
+        self.image_item.setRect(x_min, y_min, (x_max - x_min), (y_max - y_min))
+
+        self.plotItem.setMenuEnabled(False)
+        self.plotItem.vb.mouseButtons = {
+            QtCore.Qt.LeftButton: pg.ViewBox.PanMode,
+            QtCore.Qt.MiddleButton: pg.ViewBox.RectMode,
+            QtCore.Qt.RightButton: None
+        }
+        self.plotItem.vb.installEventFilter(self)
+
+    def _setup_axes(self):
+        # x axis is spatial_x, y axis is spatial_y
+        initialize_image_plot_item(self.plotItem, y_values=True, y_label="y", y_units="pixel", x_label="x", x_units="pixel")
+        self.setup_standard_axes(left_width=30, top_height=15)
+        self.setup_custom_ticks(spatial_range=self.n_x)  # reuse for x ticks
+        # Configure left as y, but we hide left label using right label pattern for consistency
+        self.configure_axis_styling(hide_left_label=True, right_label="y", right_units="pixel")
+        self.setup_viewbox_limits(x_max=self.n_x - 1, y_max=self.n_y - 1, min_range=1.0, enable_rect_zoom=True)
+        try:
+            self.plotItem.setXRange(0, self.n_x - 1, padding=0)
+            self.plotItem.setYRange(0, self.n_y - 1, padding=0)
+        except Exception:
+            pass
+
+    def _setup_crosshair(self):
+        colors = getWidgetColors()
+        self.vLine, self.hLine = add_crosshair(self.plotItem, colors.get('crosshair', 'white'), colors.get('crosshair', 'white'))
+        self.plotItem.scene().sigMouseMoved.connect(self._on_mouse_moved)
+        self.plotItem.scene().sigMouseClicked.connect(self._on_mouse_clicked)
+        self.crosshair_locked = False
+
+        # Initialize crosshair at image center
+        mid_x = (self.n_x - 1) / 2
+        mid_y = (self.n_y - 1) / 2
+        self.vLine.setPos(mid_x)
+        self.hLine.setPos(mid_y)
+
+        # Label
+        self.label = pg.LabelItem(justify='left', size='8pt')
+        self.graphics_widget.addItem(self.label, row=1, col=1)
+        self._update_label(mid_x, mid_y)
+
+    def _update_label(self, xpos: float, ypos: float):
+        xi = int(np.clip(np.round(xpos), 0, self.n_x - 1))
+        yi = int(np.clip(np.round(ypos), 0, self.n_y - 1))
+        z = float(self.full_data[yi, self.current_wl_idx, xi]) if self.n_y and self.n_x else np.nan
+        self.label.setText(f"x: {xpos:.0f}, y: {ypos:.0f}, z: {z:.5f}")
+
+    def _on_mouse_clicked(self, event):
+        if event.double():
+            p = self.plotItem.vb.mapSceneToView(event.scenePos())
+            if not self.crosshair_locked:
+                self.vLine.setPos(p.x())
+                self.hLine.setPos(p.y())
+                self._update_label(p.x(), p.y())
+            self.crosshair_locked = not self.crosshair_locked
+
+    def _on_mouse_moved(self, pos: QtCore.QPointF):
+        if not self.crosshair_locked:
+            cross = update_crosshair_from_mouse(self.plotItem, self.vLine, self.hLine, pos)
+            if cross is not None:
+                x, y = cross
+                self._update_label(x, y)
+                self.crosshairMoved.emit(x, y, self.stokes_index)
+
+    # Public API
+    @QtCore.pyqtSlot(int)
+    def update_wavelength_index(self, wl_idx: int):
+        """Update the displayed image to the given wavelength index."""
+        if not (0 <= wl_idx < self.n_wl):
+            print(f"Error: wl_idx {wl_idx} out of bounds for data with {self.n_wl} spectral pixels.")
+            return
+        self.current_wl_idx = wl_idx
+        self.image_item.setImage(self._slice_image())
+        # Refresh label at current crosshair
+        self._update_label(self.vLine.value(), self.hLine.value())
+
+    def update_spatial_x_range(self, min_val: float, max_val: float):
+        set_plot_wavelength_range(self.plotItem, self.x_pixels, min_val, max_val, axis='x')
+
+    def reset_spatial_x_range(self):
+        reset_plot_wavelength_range(self.plotItem, self.x_pixels, axis='x')
+
+    def update_spatial_y_range(self, min_val: float, max_val: float):
+        set_plot_wavelength_range(self.plotItem, self.y_pixels, min_val, max_val, axis='y')
+
+    def reset_spatial_y_range(self):
+        reset_plot_wavelength_range(self.plotItem, self.y_pixels, axis='y')
