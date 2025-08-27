@@ -40,7 +40,23 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     win = QtWidgets.QMainWindow()
     area = DockArea()
     win.setCentralWidget(area)
-    win.resize(1700, 800)
+    # Adaptive initial size: env override -> 80% of screen -> fallback
+    try:
+        spec_window = os.environ.get('SPECTATOR_WINDOW', '').lower()
+        if 'x' in spec_window:
+            sw, sh = spec_window.split('x')[:2]
+            w, h = int(sw), int(sh)
+        else:
+            screen = app.primaryScreen()
+            if screen is not None:
+                geo = screen.availableGeometry()
+                w = max(600, int(geo.width() * 0.8))
+                h = max(400, int(geo.height() * 0.8))
+            else:
+                w, h = 1280, 800
+        win.resize(w, h)
+    except Exception:
+        win.resize(1280, 800)
     win.setWindowTitle(title)
     
     # --- Generate state names ---
