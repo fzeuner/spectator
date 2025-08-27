@@ -50,7 +50,7 @@ if command -v conda >/dev/null 2>&1; then
     if [[ -z "${DISPLAY:-}" ]]; then
       if command -v xvfb-run >/dev/null 2>&1; then
         # Allow overriding virtual screen size via SPECTATOR_SCREEN, default to smaller geometry
-        SCREEN_SPEC="${SPECTATOR_SCREEN:-1280x800x24}"
+        SCREEN_SPEC="${SPECTATOR_SCREEN:-1600x900x24}"
         echo "[info] DISPLAY not set -> using xvfb-run with screen ${SCREEN_SPEC}" >&2
         RUNNER_PREFIX=(xvfb-run -a -s "-screen 0 ${SCREEN_SPEC}")
       else
