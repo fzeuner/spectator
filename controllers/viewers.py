@@ -180,11 +180,9 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
                     control_widget.lines_content_widget.notify_spatial_region_removed()
             image_spectra[i].spatial_manager.on_region_removed = _on_spat_removed
         
-        # Connect averaging line synchronization signals (propagate to other windows when sync is enabled)
-        if hasattr(image_spectra[i], 'spectral_manager'):
-            image_spectra[i].spectral_manager.regionChanged.connect(control_widget.handle_spectral_avg_line_movement)
-        if hasattr(image_spectra[i], 'spatial_manager'):
-            image_spectra[i].spatial_manager.regionChanged.connect(control_widget.handle_spatial_avg_line_movement)
+        # Averaging line synchronization is handled via window-level signals
+        # avgRegionChanged and spatialAvgRegionChanged above. Avoid connecting
+        # manager.regionChanged here to prevent duplicate handler calls.
         
         # Also allow clearing spatial avg from spectrum window
         if i < len(spectra):

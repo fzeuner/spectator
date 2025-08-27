@@ -171,7 +171,7 @@ viewer = display_data(data, 'states', 'spectral', 'spatial',
 - Use the file listing controller to browse .dat files
 - Automatic filtering for science data files
 
-## Configuration
+## Configuration (only if file browser is used)
 
 Spectator reads configuration from a repo-local JSON file with sensible defaults.
 
@@ -222,7 +222,7 @@ USER_CONFIG_PATH = os.path.join(USER_CONFIG_DIR, "file_config.json")
 **Navigation:**
 - **Crosshairs**: Move to navigate through spectral and spatial dimensions
 - **Synchronized Views**: All windows update simultaneously for consistent data exploration
-- **Zoom and Pan**: Mouse wheel and drag operations for detailed examination (not synchronized)
+- **Zoom**: Mouse wheel for detailed examination (can be synchronized over all states)
 
 **Analysis Tools:**
 - **Spectral Averaging**: Select wavelength ranges for averaged profiles
@@ -316,14 +316,11 @@ spectator/
 
 ### Optional Dependencies
 
-- **SciPy**: Advanced scientific computing features
-- **Matplotlib**: Additional plotting capabilities (if needed)
+- **SciPy**: Advanced scientific computing features, for IDL file reading support via `utils.file_model`
 
 ### System Requirements
 
-- **Memory**: 4GB+ RAM recommended for large datasets
 - **Display**: 1920x1080+ resolution for optimal layout
-- **OS**: Windows, macOS, or Linux
 
 ## License
 
@@ -332,5 +329,5 @@ This project is developed for scientific research purposes. Please contact the m
 ## Acknowledgments
 
 - **Original concept**: Replacement for IDL Z3showred by Franziska Zeuner
-- **Architecture design**: Modern MVC pattern implementation, originally started by Denny Schwender, then complete redesign by Franziska Zeuner, added functionalities with Claude Sonnet 4.0
+- **Architecture design**: Modern MVC pattern implementation, originally started by Denny Schwender, then complete redesign by Franziska Zeuner, added some functionalities with Claude Sonnet 4.0
 - **PyQtGraph team**: Excellent plotting library that makes this application possible
