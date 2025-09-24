@@ -113,6 +113,17 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
    # Then simply run: z3showred
    ```
 
+### Editable install (pip)
+
+To make the spectator package importable from anywhere (e.g., `import spectator`), install it in editable mode:
+
+```bash
+cd spectator
+pip install -e .
+```
+
+This links your working copy so changes in this folder are immediately reflected when importing `spectator` without reinstalling.
+
 ## Usage
 
 Spectator provides two main usage modes, mimicking the flexibility of the original IDL Z3showred:

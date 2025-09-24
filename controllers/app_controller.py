@@ -307,7 +307,8 @@ class DataScaler:
         
         # Round to nearest power of 10 for clean scaling
         exponent = round(np.log10(required_scale))
-        scale_factor = 10 ** exponent
+        # Ensure scale factor is a float regardless of exponent sign
+        scale_factor = 10.0 ** exponent
         
         # Generate appropriate label
         if exponent > 0:
@@ -331,7 +332,11 @@ class DataScaler:
         Returns:
             Scaled data array
         """
+        # Always operate in float to avoid integer propagation
+        data = data.astype(np.float32, copy=False)
+
         if not auto_scale:
+            # Even when auto scaling is disabled, return float view of the data
             return data
         
         # Check if data has a states axis
@@ -345,8 +350,9 @@ class DataScaler:
             self.current_scale_labels = {'global': label}
             
             if scale_factor != 1.0:
-                return data * scale_factor
+                return data * float(scale_factor)
             else:
+                # Return float data even if no scaling applied
                 return data
         
         # Has states axis - apply per-state scaling
@@ -354,7 +360,7 @@ class DataScaler:
         n_states = data.shape[self.states_axis_index]
         
         # Create a copy of the data for scaling
-        scaled_data = data.copy()
+        scaled_data = data.astype(np.float32, copy=True)
         
         # Scale each state independently
         for state_idx in range(n_states):
@@ -373,7 +379,7 @@ class DataScaler:
             
             # Apply scaling to this state if needed
             if scale_factor != 1.0:
-                scaled_data[state_slice] = state_data * scale_factor
+                scaled_data[state_slice] = state_data.astype(np.float32, copy=False) * float(scale_factor)
         
         return scaled_data
     
