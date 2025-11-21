@@ -214,6 +214,20 @@ class FileListingController(QtWidgets.QWidget):
                     self.directory = [self._start_directory]
         except Exception:
             pass
+
+    @QtCore.pyqtSlot()
+    def _on_directory_entered(self):
+        """Handle manual edits of the current directory path."""
+        path = self.directorylabel.text().strip()
+        if not path:
+            return
+        import os
+        if os.path.isdir(path):
+            try:
+                self._populate_from_paths([path])
+                self.directory = [path]
+            except Exception:
+                pass
     
     def _setup_ui(self):
         """Setup the user interface."""
@@ -241,14 +255,14 @@ class FileListingController(QtWidgets.QWidget):
         self.refresh_button = QtWidgets.QPushButton('Refresh')
         self.refresh_button.clicked.connect(self.refresh_listing)
         self.listWidget = QtWidgets.QListWidget()
-        self.directorylabel = QtWidgets.QLabel()
+        self.directorylabel = QtWidgets.QLineEdit()
         self.fileinfolabel1 = QtWidgets.QLabel()
         self.fileinfolabel2 = QtWidgets.QLabel()
         
-        # Set initial text
+        # Set initial text and make directory editable
         initial_dir = self._start_directory or self.directory[0]
-        self.directorylabel.setText('Current directory: ' + initial_dir)
-        self.directorylabel.setWordWrap(True)
+        self.directorylabel.setText(initial_dir)
+        self.directorylabel.returnPressed.connect(self._on_directory_entered)
         self.fileinfolabel1.setText('Files sub-directory: ' + self.must_be_in_directory)
         
         file_type_string = " ".join(self.excluded_file_types)
@@ -330,10 +344,25 @@ class FileListingController(QtWidgets.QWidget):
         dialog.setWindowTitle('Choose a directory')
         dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
         dialog.setFileMode(QtWidgets.QFileDialog.DirectoryOnly)
-        # Set starting directory from config
-        if self._start_directory and os.path.isdir(self._start_directory):
+        # Set starting directory, preferring the current directory over config
+        import os
+        start_dir = ''
+        try:
+            if self.directory and os.path.isdir(self.directory[0]):
+                start_dir = self.directory[0]
+            elif self._start_directory and os.path.isdir(self._start_directory):
+                start_dir = self._start_directory
+            else:
+                start_dir = os.getcwd()
+        except Exception:
             try:
-                dialog.setDirectory(self._start_directory)
+                start_dir = self._start_directory if (self._start_directory and os.path.isdir(self._start_directory)) else os.getcwd()
+            except Exception:
+                start_dir = ''
+
+        if start_dir:
+            try:
+                dialog.setDirectory(start_dir)
             except Exception:
                 pass
         
@@ -384,10 +413,12 @@ class FileListingController(QtWidgets.QWidget):
                 self.listWidget.addItems(show_file_list)
 
                 chosen_dir = selected_paths[0] if selected_paths else self.directory[0]
-                self.directorylabel.setText(f'Current directory: {chosen_dir}')
+                self.directory = [chosen_dir]
+                self.directorylabel.setText(chosen_dir)
             else:
                 # No files found: show directories for user to drill down
                 base = selected_paths[0] if selected_paths else self.directory[0]
+                self.directory = [base]
                 self._populate_directories(base)
                 return
 
@@ -400,12 +431,11 @@ class FileListingController(QtWidgets.QWidget):
         """Refresh current listing according to current mode and directory."""
         try:
             current_base = self.directory[0] if self.directory else (self._start_directory or '')
-            if self._listing_mode == 'files':
-                # Re-list files for the current directory
-                self._populate_from_paths([current_base])
-            else:
-                # Re-list subdirectories for the current base
-                self._populate_directories(current_base)
+            # Always re-attempt a file listing for the current base.
+            # _populate_from_paths already contains logic to fall back to
+            # directory listing and to treat the configured base parent
+            # directory specially.
+            self._populate_from_paths([current_base])
         except Exception:
             pass
 
@@ -438,18 +468,30 @@ class FileListingController(QtWidgets.QWidget):
                 entries = []
 
             if entries:
+                # If there's exactly one subdirectory and it matches the required
+                # must_be_in_directory (e.g. 'reduced'), automatically descend
+                # into it instead of listing only that subdirectory.
+                try:
+                    must_dir = self.must_be_in_directory
+                except Exception:
+                    must_dir = None
+
+                if must_dir and len(entries) == 1 and entries[0][0] == must_dir:
+                    self._populate_from_paths([entries[0][1]])
+                    return
+
                 show_dirs = []
                 for n, (name, full) in enumerate(entries):
                     self._dir_paths.append(full)
                     show_dirs.append(f"{n+1}. {name}")
                 self.listWidget.addItems(show_dirs)
-                self.directorylabel.setText(f"Current directory: {base_dir}")
+                self.directorylabel.setText(base_dir)
             else:
                 self.listWidget.addItem("No subdirectories found.")
                 for i in range(self.listWidget.count()):
                     item = self.listWidget.item(i)
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
-                self.directorylabel.setText(f"Current directory: {base_dir}")
+                self.directorylabel.setText(base_dir)
         except Exception:
             # Non-fatal UI population errors should not crash the app
             pass
