@@ -13,13 +13,20 @@ from typing import Tuple, Optional
 from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
 from .colors import getWidgetColors
 
+SOLID_LINE = QtCore.Qt.PenStyle.SolidLine
+DASH_LINE = QtCore.Qt.PenStyle.DashLine
+DOT_LINE = QtCore.Qt.PenStyle.DotLine
+
+
+ALIGN_CENTER = QtCore.Qt.AlignmentFlag.AlignCenter
+
 
 def add_line(plot_item: pg.PlotItem, 
              color: str, 
              angle: float, 
              moveable: bool = False, 
              pos: float = 0, 
-             style=QtCore.Qt.SolidLine,
+             style=SOLID_LINE,
              is_averaging_line: bool = False) -> pg.InfiniteLine:
     """
     Add an InfiniteLine to a PlotItem.
@@ -41,7 +48,7 @@ def add_line(plot_item: pg.PlotItem,
     
     # Set custom hover pen based on line type
     if moveable:
-        if is_averaging_line and style == QtCore.Qt.SolidLine:
+        if is_averaging_line and style == SOLID_LINE:
             # Orange hover for solid averaging lines only
             hover_pen = pg.mkPen(color=HOVER_COLOR_AVERAGING, width=DEFAULT_LINE_WIDTH + 1, style=style)
         else:
@@ -56,7 +63,7 @@ def add_line(plot_item: pg.PlotItem,
 def add_crosshair(plot_item: pg.PlotItem, 
                   v_color: str, 
                   h_color: str, 
-                  style=QtCore.Qt.DashLine) -> Tuple[pg.InfiniteLine, pg.InfiniteLine]:
+                  style=DASH_LINE) -> Tuple[pg.InfiniteLine, pg.InfiniteLine]:
     """
     Add a crosshair (vertical and horizontal InfiniteLine) to a PlotItem.
     
@@ -133,7 +140,7 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
             border-radius: 1px;
         }}
     """)
-    scale_label.setAlignment(QtCore.Qt.AlignCenter)
+    scale_label.setAlignment(ALIGN_CENTER)
     scale_label.setMaximumHeight(20)
     scale_label.setMinimumHeight(20)
     

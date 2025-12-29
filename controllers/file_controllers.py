@@ -273,16 +273,16 @@ class FileListingController(QtWidgets.QWidget):
         layout.addWidget(self.listWidget)
         # Place toggle buttons above the other buttons
         toggles_row = QtWidgets.QHBoxLayout()
-        self.display_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.always_new_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.display_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.always_new_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
         toggles_row.addWidget(self.display_button, 1)
         toggles_row.addWidget(self.always_new_button, 1)
         layout.addLayout(toggles_row)
         # Buttons row (Choose + Refresh) – make them share full width equally
         buttons_row = QtWidgets.QHBoxLayout()
         # Make buttons expand equally to fill the row
-        self.button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self.refresh_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.refresh_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
         buttons_row.addWidget(self.button, 1)
         buttons_row.addWidget(self.refresh_button, 1)
         layout.addLayout(buttons_row)
@@ -342,8 +342,9 @@ class FileListingController(QtWidgets.QWidget):
         """Handle directory selection and populate file list."""
         dialog = QtWidgets.QFileDialog(self)
         dialog.setWindowTitle('Choose a directory')
-        dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
-        dialog.setFileMode(QtWidgets.QFileDialog.DirectoryOnly)
+        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.Directory)
+        dialog.setOption(QtWidgets.QFileDialog.Option.ShowDirsOnly, True)
         # Set starting directory, preferring the current directory over config
         import os
         start_dir = ''
@@ -366,11 +367,13 @@ class FileListingController(QtWidgets.QWidget):
             except Exception:
                 pass
         
-        for view in dialog.findChildren((QtWidgets.QListView, QtWidgets.QTreeView)):
-            if isinstance(view.model(), QtWidgets.QFileSystemModel):
-                view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        for view in dialog.findChildren(QtWidgets.QTreeView):
+            try:
+                view.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            except Exception:
+                pass
         
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             selected = dialog.selectedFiles()
             # If user chose the base (parent) directory, do NOT list files; show its subdirectories
             base = selected[0] if selected else self.directory[0]
@@ -454,7 +457,7 @@ class FileListingController(QtWidgets.QWidget):
                 # Disable selection for info items
                 for i in range(self.listWidget.count()):
                     item = self.listWidget.item(i)
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 return
 
             # List immediate subdirectories
@@ -490,7 +493,7 @@ class FileListingController(QtWidgets.QWidget):
                 self.listWidget.addItem("No subdirectories found.")
                 for i in range(self.listWidget.count()):
                     item = self.listWidget.item(i)
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 self.directorylabel.setText(base_dir)
         except Exception:
             # Non-fatal UI population errors should not crash the app

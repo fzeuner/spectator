@@ -69,22 +69,26 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.12 or higher
 - Conda package manager (recommended)
 
 ### Environment Setup
 
+#### Branch note (scan_view_dev)
+
+On branch `scan_view_dev`, spectator is fully ported to **PyQt6** and recent **pyqtgraph** versions. The historical `Dock`/`DockLabel` issue is fixed upstream in pyqtgraph, so no manual patching of pyqtgraph files is required. Dock title clipping with `qdarkstyle` is handled in-code via `FixedDockLabel` (see `utils/fixed_dock_label.py`).
+
 1. **Create and activate the conda environment:**
    ```bash
    (optionally: source ~/miniconda3/bin/activate if conda is not in your path)
-   conda create -n spectator python=3.12
+   conda create -n spectator python=3.14
    conda activate spectator
    ```
 
 2. **Install required packages:**
    ```bash
-   conda install numpy pyqtgraph qdarkstyle scipy
-   pip install PyQt5  # or PyQt6
+   conda install -c conda-forge numpy pyqtgraph qdarkstyle scipy
+   pip install PyQt6
    ```
 
 3. **Clonet:**
@@ -92,10 +96,11 @@ My idea is that you can provide numpy data arrays with up to 5 dimensions, where
    git clone https://github.com/fzeuner/spectator.git
    ```
 
-4. **Stupid fix for pyqtgraph:**
+4. **Legacy workaround for older pyqtgraph versions (not needed on `scan_view_dev`):**
    ```bash
    mv miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/widgets/VerticalLabel.py_bk
    cp spectator/utils/VerticalLabel.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/widgets/
+   
    mv miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/Dock.py_bk
    cp spectator/utils/Dock.py miniconda3/envs/spectator/lib/python3.12/site-packages/pyqtgraph/dockarea/
    ```

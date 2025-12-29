@@ -11,6 +11,7 @@ from pyqtgraph.dockarea import DockArea, Dock
 from .file_controllers import FileListingController, FileLoadingController
 from utils.info_formatter import format_info_to_html
 from utils.colors import getWidgetColors
+from utils.fixed_dock_label import FixedDockLabel
 
 
 class FileBrowserApp(QtWidgets.QMainWindow):
@@ -33,7 +34,12 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.setCentralWidget(self.dock_area)
 
         # Files dock (narrow)
-        self.files_dock = Dock("Files", closable=False, size=(1, 1))  # relative size
+        self.files_dock = Dock(
+            "Files",
+            closable=False,
+            size=(1, 1),
+            label=FixedDockLabel("Files"),
+        )  # relative size
         files_container = QtWidgets.QWidget()
         files_layout = QtWidgets.QVBoxLayout(files_container)
         files_layout.setContentsMargins(8, 8, 8, 8)
@@ -44,7 +50,12 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.files_dock.addWidget(files_container)
 
         # Info dock (wide)
-        self.info_dock = Dock("Info", closable=False, size=(3, 1))  # wider than Files
+        self.info_dock = Dock(
+            "Info",
+            closable=False,
+            size=(3, 1),
+            label=FixedDockLabel("Info"),
+        )  # wider than Files
         info_container = QtWidgets.QWidget()
         info_layout = QtWidgets.QVBoxLayout(info_container)
         info_layout.setContentsMargins(8, 8, 8, 8)
@@ -57,7 +68,12 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.info_dock.addWidget(info_container)
 
         # Observer log dock (stacked with Info using pyqtgraph Dock tabs)
-        self.observer_log_dock = Dock("Observer log", closable=False, size=(3, 1))
+        self.observer_log_dock = Dock(
+            "Observer log",
+            closable=False,
+            size=(3, 1),
+            label=FixedDockLabel("Observer log"),
+        )
         observer_container = QtWidgets.QWidget()
         observer_layout = QtWidgets.QVBoxLayout(observer_container)
         observer_layout.setContentsMargins(8, 8, 8, 8)
@@ -351,4 +367,4 @@ def run():
         print(f"Could not apply qdarkstyle: {e}")
     w = FileBrowserApp()
     w.show()
-    return app.exec_()
+    return app.exec()

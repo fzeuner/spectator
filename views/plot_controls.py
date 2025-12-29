@@ -16,6 +16,7 @@ from .line_controls import LinesControlGroup
 from .spectrum_limits import SpectrumLimitControlGroup
 from utils.plotting import create_wavelength_limit_controls
 from utils.synchronization import SynchronizationManager
+from utils.fixed_dock_label import FixedDockLabel
 
 
 class PlotControlWidget(QtWidgets.QWidget):
@@ -53,10 +54,20 @@ class PlotControlWidget(QtWidgets.QWidget):
         self.dock_area = DockArea()
         self.main_layout.addWidget(self.dock_area)
 
-        self.limits_dock = Dock("Limits", closable=False, size=(1,1))
+        self.limits_dock = Dock(
+            "Limits",
+            closable=False,
+            size=(1, 1),
+            label=FixedDockLabel("Limits"),
+        )
         self.dock_area.addDock(self.limits_dock)
 
-        self.lines_dock = Dock("Lines", closable=False, size=(1,1))
+        self.lines_dock = Dock(
+            "Lines",
+            closable=False,
+            size=(1, 1),
+            label=FixedDockLabel("Lines"),
+        )
         self.dock_area.addDock(self.lines_dock, 'above', self.limits_dock)
 
         # --- Widgets for the "limits" dock ---

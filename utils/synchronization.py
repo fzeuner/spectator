@@ -7,7 +7,7 @@ and other plot interactions without code duplication.
 
 import numpy as np
 from typing import List, Optional, Callable, Any
-from PyQt5 import QtCore
+from pyqtgraph.Qt import QtCore
 
 
 class SynchronizationManager(QtCore.QObject):

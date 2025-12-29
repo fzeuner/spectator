@@ -5,6 +5,7 @@ import qdarkstyle
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
 from utils.constants import CONTROL_PANEL_SIZE, get_initial_window_size
+from utils.fixed_dock_label import FixedDockLabel
 from typing import List, Dict, Any 
  
 
@@ -87,9 +88,21 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
             print(f"Warning: could not initialize spectrum window from crosshair: {e}")
 
         # Create Docks (spectrum clearly wider than spatial)
-        spectrum_dock = Dock(f"{base_name} spectrum", size=(600, 260))
-        spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(800, 540))
-        spatial_dock = Dock(f"{base_name} spatial", size=(360, 240))
+        spectrum_dock = Dock(
+            f"{base_name} spectrum",
+            size=(600, 260),
+            label=FixedDockLabel(f"{base_name} spectrum"),
+        )
+        spectrum_image_dock = Dock(
+            f"{base_name} spectrum image",
+            size=(800, 540),
+            label=FixedDockLabel(f"{base_name} spectrum image"),
+        )
+        spatial_dock = Dock(
+            f"{base_name} spatial",
+            size=(360, 240),
+            label=FixedDockLabel(f"{base_name} spatial"),
+        )
 
         # Add Widgets to Docks
         spectrum_dock.addWidget(win_spectrum)
@@ -105,7 +118,11 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial) # Now initialize UI for limits
        
     # --- Create Control Dock ---
-    control_dock = Dock("Control", size=(int(CONTROL_PANEL_SIZE[0] * 1.5), CONTROL_PANEL_SIZE[1]))
+    control_dock = Dock(
+        "Control",
+        size=(int(CONTROL_PANEL_SIZE[0] * 1.5), CONTROL_PANEL_SIZE[1]),
+        label=FixedDockLabel("Control"),
+    )
     
     # --- Arrange Docks in the DockArea ---
     
@@ -246,7 +263,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
     # If we created the QApplication here, start the event loop; otherwise, return window for embedding
     if created_app:
-        app.exec_()
+        app.exec()
         return None
     else:
         return win

@@ -62,14 +62,17 @@ class FilesControlWidget(QtWidgets.QWidget):
         """Handle directory selection and populate file list."""
         dialog = QtWidgets.QFileDialog(self)
         dialog.setWindowTitle('Choose a directory')
-        dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
-        dialog.setFileMode(QtWidgets.QFileDialog.DirectoryOnly)
+        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.Directory)
+        dialog.setOption(QtWidgets.QFileDialog.Option.ShowDirsOnly, True)
         
-        for view in dialog.findChildren((QtWidgets.QListView, QtWidgets.QTreeView)):
-            if isinstance(view.model(), QtWidgets.QFileSystemModel):
-                view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        for view in dialog.findChildren(QtWidgets.QTreeView):
+            try:
+                view.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            except Exception:
+                pass
         
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             self.listWidget.clear()
             self.file_paths.clear()
             

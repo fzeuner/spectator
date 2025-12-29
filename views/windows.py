@@ -16,6 +16,7 @@ from utils import (
     initialize_spectrum_plot_item, initialize_image_plot_item,
     set_plot_wavelength_range, reset_plot_wavelength_range, update_crosshair_from_mouse
 )
+from utils.plotting import SOLID_LINE
 
 class StokesSpatialWindow(BasePlotWidget):
     
@@ -40,7 +41,7 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve)
         
         colors = getWidgetColors()
-        self.plot_curve_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_v', 'yellow'), style=QtCore.Qt.SolidLine, width=2)) 
+        self.plot_curve_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_v', 'yellow'), style=SOLID_LINE, width=2)) 
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
@@ -238,7 +239,7 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve)
         
         colors = getWidgetColors()
-        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_h', 'dodgerblue'), style=QtCore.Qt.SolidLine, width=2)) 
+        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_h', 'dodgerblue'), style=SOLID_LINE, width=2)) 
         self.plotItem.addItem(self.plot_curve_spectral_avg)
 
         colors = getWidgetColors()
@@ -425,9 +426,9 @@ class StokesSpectrumImageWindow(BasePlotWidget):
 
         self.plotItem.setMenuEnabled(False)
         self.plotItem.vb.mouseButtons = {
-            QtCore.Qt.LeftButton: pg.ViewBox.PanMode,
-            QtCore.Qt.MiddleButton: pg.ViewBox.RectMode,
-            QtCore.Qt.RightButton: None
+            QtCore.Qt.MouseButton.LeftButton: pg.ViewBox.PanMode,
+            QtCore.Qt.MouseButton.MiddleButton: pg.ViewBox.RectMode,
+            QtCore.Qt.MouseButton.RightButton: None
         }
         self.plotItem.vb.installEventFilter(self)
 
@@ -521,7 +522,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     def eventFilter(self, obj, event):
         if obj == self.plotItem.vb:
             # Handle right-click events based on averaging state
-            if event.type() == QtCore.QEvent.GraphicsSceneMousePress and event.button() == QtCore.Qt.RightButton:
+            if event.type() == QtCore.QEvent.Type.GraphicsSceneMousePress and event.button() == QtCore.Qt.MouseButton.RightButton:
                 if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
                     self._handleMousePress(event)
                     return True
@@ -529,13 +530,13 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                     # Block right-click completely when no averaging is enabled
                     return True
             # Block panning: consume middle-button drags entirely
-            elif event.type() == QtCore.QEvent.GraphicsSceneMousePress and event.button() == QtCore.Qt.MiddleButton:
+            elif event.type() == QtCore.QEvent.Type.GraphicsSceneMousePress and event.button() == QtCore.Qt.MouseButton.MiddleButton:
                 return True
-            elif event.type() == QtCore.QEvent.GraphicsSceneMouseMove and getattr(event, 'buttons', lambda: 0)() & QtCore.Qt.MiddleButton:
+            elif event.type() == QtCore.QEvent.Type.GraphicsSceneMouseMove and getattr(event, 'buttons', lambda: 0)() & QtCore.Qt.MouseButton.MiddleButton:
                 return True
-            elif event.type() == QtCore.QEvent.GraphicsSceneMouseRelease and event.button() == QtCore.Qt.MiddleButton:
+            elif event.type() == QtCore.QEvent.Type.GraphicsSceneMouseRelease and event.button() == QtCore.Qt.MouseButton.MiddleButton:
                 return True
-            elif event.type() == QtCore.QEvent.GraphicsSceneMouseMove and self.right_button_pressed:
+            elif event.type() == QtCore.QEvent.Type.GraphicsSceneMouseMove and self.right_button_pressed:
                 if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
                     current_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
                     if self.spectral_averaging_enabled and hasattr(self, 'spectral_manager'):
@@ -547,7 +548,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
                 else:
                     # Block right-click drag when no averaging is enabled
                     return True
-            elif event.type() == QtCore.QEvent.GraphicsSceneMouseRelease and event.button() == QtCore.Qt.RightButton:
+            elif event.type() == QtCore.QEvent.Type.GraphicsSceneMouseRelease and event.button() == QtCore.Qt.MouseButton.RightButton:
                 if self.spectral_averaging_enabled or self.spatial_averaging_enabled:
                     self._handleMouseRelease(event)
                     return True

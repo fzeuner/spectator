@@ -6,11 +6,11 @@ averaging lines, eliminating code duplication and providing a consistent interfa
 """
 
 import numpy as np
-from PyQt5 import QtCore
 import pyqtgraph as pg
 from typing import Optional, Tuple, Callable
 from utils.colors import getWidgetColors
-from utils.plotting import add_line
+from pyqtgraph.Qt import QtCore
+from utils.plotting import add_line, SOLID_LINE, DOT_LINE, DASH_LINE
 
 MIN_LINE_DISTANCE = 3
 
@@ -107,9 +107,9 @@ class AveragingLineManager(QtCore.QObject):
         colors = getWidgetColors()
         color = colors.get(self.color_key, 'yellow')
         
-        self.line1 = add_line(self.plot_item, color, self.angle, pos=pos1, moveable=True, style=QtCore.Qt.SolidLine, is_averaging_line=True)
-        self.line2 = add_line(self.plot_item, color, self.angle, pos=pos2, moveable=True, style=QtCore.Qt.SolidLine, is_averaging_line=True)
-        self.center_line = add_line(self.plot_item, color, self.angle, pos=center_pos, moveable=True, style=QtCore.Qt.DotLine, is_averaging_line=True)
+        self.line1 = add_line(self.plot_item, color, self.angle, pos=pos1, moveable=True, style=SOLID_LINE, is_averaging_line=True)
+        self.line2 = add_line(self.plot_item, color, self.angle, pos=pos2, moveable=True, style=SOLID_LINE, is_averaging_line=True)
+        self.center_line = add_line(self.plot_item, color, self.angle, pos=center_pos, moveable=True, style=DOT_LINE, is_averaging_line=True)
         
         # Connect signals
         self.line1.sigPositionChanged.connect(lambda line: self._update_lines_and_emit(source_line=line))
@@ -320,7 +320,7 @@ class AveragingLineManager(QtCore.QObject):
         colors = getWidgetColors()
         color = colors.get(self.color_key, 'yellow')
         # DashLine preview at start position
-        self._temp_line_press = add_line(self.plot_item, color, self.angle, pos=self._drag_start_pos, style=QtCore.Qt.DashLine)
+        self._temp_line_press = add_line(self.plot_item, color, self.angle, pos=self._drag_start_pos, style=DASH_LINE)
 
     def update_drag_to(self, pos: float) -> None:
         """Update preview to current position by drawing/moving second dashed line."""
@@ -334,7 +334,7 @@ class AveragingLineManager(QtCore.QObject):
             except Exception:
                 pass
             self._temp_line_drag = None
-        self._temp_line_drag = add_line(self.plot_item, color, self.angle, pos=current_pos, style=QtCore.Qt.DashLine)
+        self._temp_line_drag = add_line(self.plot_item, color, self.angle, pos=current_pos, style=DASH_LINE)
 
     def end_drag_at(self, pos: float) -> None:
         """Finish the preview drag, create region from span, and clear preview."""

@@ -89,7 +89,7 @@ class SpectrumLimitControlGroup(BaseControlWidget):
     
     def _toggle_fix_spectrum_limits(self, state: QtCore.Qt.CheckState):
         """Toggle fixed spectrum limits mode."""
-        fixed = state == QtCore.Qt.Checked
+        fixed = state == QtCore.Qt.CheckState.Checked
         self.min_limit_edit.setEnabled(fixed)
         self.max_limit_edit.setEnabled(fixed)
         
