@@ -93,7 +93,7 @@ On branch `scan_view_dev`, spectator is fully ported to **PyQt6** and recent **p
 
 3. **Clonet:**
    ```bash
-   git clone https://github.com/fzeuner/spectator.git
+   git clone ssh://github.com/fzeuner/spectator.git
    ```
 
 4. **Legacy workaround for older pyqtgraph versions (not needed on `scan_view_dev`):**
