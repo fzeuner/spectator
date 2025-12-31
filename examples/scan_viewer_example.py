@@ -30,7 +30,7 @@ def main():
     # Launch viewer
     win = display_data(
         data,
-        order=['states', 'spectral', 'spatial', 'spatial'],
+        order=['states', 'spatial_y', 'spectral', 'spatial_x'],
         title='Scan Viewer Example',
         state_names=['I', 'Q'],
         rearrange=True

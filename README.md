@@ -173,14 +173,17 @@ source ~/.bashrc
 from controllers.app_controller import display_data
 import numpy as np
 
-# Load your 3D data (states, spectral, spatial)
+# Load your 3D data (states, spectral, spatial_x)
 data = np.load('your_data.npy')
 
-# Display with automatic axis detection
+# Display with explicit axis semantics
 # data.shape[0] should be 4, because 4 state names are given
-viewer = display_data(data, 'states', 'spectral', 'spatial', 
-                     title='My Data', 
-                     state_names=['I', 'Q', 'U', 'V'])
+viewer = display_data(
+    data,
+    order=['states', 'spectral', 'spatial_x'],
+    title='My Data',
+    state_names=['I', 'Q', 'U', 'V'],
+)
 ```
 
 **ZIMPOL File Browser (if available):**

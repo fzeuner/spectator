@@ -7,28 +7,20 @@ This module provides a flexible interface for handling multi-dimensional data
 with arbitrary axis ordering and generates appropriate viewers based on the
 data structure and user specifications.
 
-Supported dimensions:
 
-- 3D: states +  spatial + spectral
 
 """
 
 import numpy as np
 from typing import List, Tuple, Dict, Optional, Union, Any, Sequence
-from enum import Enum
 import warnings
+from collections import Counter
 # local imports
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.viewer_config import VIEWER_SELECTION_RULES
-
-class AxisType(Enum):
-    """Enumeration of supported axis types."""
-    STATES = "states"
-    SPECTRAL = "spectral"
-    SPATIAL = "spatial"
-    TIME = "time"
+from models.axis_types import AxisType
 
 class DataDimensionality:
     """Class to handle data dimensionality analysis and validation."""
@@ -75,9 +67,10 @@ class DataDimensionality:
         # Check states constraint
         if axis_counts[AxisType.STATES] > 1:
             raise ValueError("Only one 'states' axis is allowed")
-        
-        # Check spatial constraint
-        if axis_counts[AxisType.SPATIAL] > self.max_spatial_axes:
+
+        # Check spatial constraint (spatial_y + spatial_x)
+        spatial_count = axis_counts.get(AxisType.SPATIAL_Y, 0) + axis_counts.get(AxisType.SPATIAL_X, 0)
+        if spatial_count > self.max_spatial_axes:
             raise ValueError(f"Maximum {self.max_spatial_axes} spatial axes allowed")
         
         # Check spectral and time constraints
@@ -89,16 +82,17 @@ class DataDimensionality:
         
         # Validate specific dimension requirements
         if len(axis_types) == 1:
-            if axis_types[0] not in [AxisType.SPATIAL, AxisType.SPECTRAL, AxisType.TIME]:
-                raise ValueError("1D data must be spatial, spectral, or time")
+            if axis_types[0] not in [AxisType.SPATIAL_Y, AxisType.SPATIAL_X, AxisType.SPECTRAL, AxisType.TIME]:
+                raise ValueError("1D data must be spatial_y, spatial_x, spectral, or time")
 
 class DataRearranger:
     """Class to handle data rearrangement for different viewer requirements."""
     
     def __init__(self):
-        self.target_order_3d = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL]
-        self.target_order_4d = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL, AxisType.SPATIAL]
-        self.target_order_5d = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL, AxisType.SPATIAL, AxisType.TIME]
+        # Target axis orders are now determined by Manager.display_data
+        # based on VIEWER_SELECTION_RULES. This class only performs the
+        # actual rearrangement given input and target AxisType lists.
+        pass
     
     def rearrange_data(self, data: np.ndarray, 
                       input_axes: List[AxisType], 
@@ -130,105 +124,14 @@ class DataRearranger:
         rearranged_data = np.transpose(data, axis_mapping)
         
         return rearranged_data
-    
-    def get_target_order(self, input_axes: List[AxisType]) -> List[AxisType]:
-        """
-        Determine the target axis order based on input dimensionality.
-        
-        Args:
-            input_axes: Input axis specification
-            
-        Returns:
-            Target axis order for the viewer
-        """
-        ndim = len(input_axes)
-        
-        if ndim <= 2:
-            # For 1D and 2D, preserve order but ensure spatial comes last if present
-            target_order = input_axes.copy()
-            if AxisType.SPATIAL in target_order:
-                # Move spatial to end
-                spatial_indices = [i for i, ax in enumerate(target_order) if ax == AxisType.SPATIAL]
-                for i in reversed(spatial_indices):
-                    target_order.append(target_order.pop(i))
-            return target_order
-        
-        elif ndim == 3:
-            # For 3D, use standard order: states, spectral, spatial (if all present)
-            if set(input_axes) == set(self.target_order_3d):
-                return self.target_order_3d
-            else:
-                # Custom 3D arrangement
-                return self._arrange_custom_3d(input_axes)
-        
-        elif ndim == 4:
-            return self._arrange_4d(input_axes)
-        
-        elif ndim == 5:
-            return self.target_order_5d
-        
-        else:
-            raise ValueError(f"Unsupported number of dimensions: {ndim}")
-    
-    def _arrange_custom_3d(self, input_axes: List[AxisType]) -> List[AxisType]:
-        """Arrange 3D data that doesn't follow the standard pattern."""
-        # Priority order: states, spectral, spatial, time
-        priority = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL, AxisType.TIME]
-        
-        target_order = []
-        for axis_type in priority:
-            if axis_type in input_axes:
-                target_order.append(axis_type)
-        
-        # Add any remaining spatial axes
-        spatial_count = input_axes.count(AxisType.SPATIAL)
-        if spatial_count > 1:
-            target_order.extend([AxisType.SPATIAL] * (spatial_count - 1))
-        
-        return target_order
-    
-    def _arrange_4d(self, input_axes: List[AxisType]) -> List[AxisType]:
-        """Arrange 4D data.
-
-        For scan viewer, we target: states, spatial, spectral, spatial
-        """
-        target_order: List[AxisType] = []
-        remaining_axes = input_axes.copy()
-        # Start with states if present
-        if AxisType.STATES in remaining_axes:
-            target_order.append(AxisType.STATES)
-            remaining_axes.remove(AxisType.STATES)
-        # Then the first spatial, then spectral, then any remaining spatial, then time if present
-        if AxisType.SPATIAL in remaining_axes:
-            target_order.append(AxisType.SPATIAL)
-            remaining_axes.remove(AxisType.SPATIAL)
-        if AxisType.SPECTRAL in remaining_axes:
-            target_order.append(AxisType.SPECTRAL)
-            remaining_axes.remove(AxisType.SPECTRAL)
-        # Add any remaining spatial
-        while AxisType.SPATIAL in remaining_axes:
-            target_order.append(AxisType.SPATIAL)
-            remaining_axes.remove(AxisType.SPATIAL)
-        # Finally, time if present
-        if AxisType.TIME in remaining_axes:
-            target_order.append(AxisType.TIME)
-            remaining_axes.remove(AxisType.TIME)
-        # Append any other leftover axes to preserve input
-        target_order.extend(remaining_axes)
-        return target_order
 
 class ViewerSelector:
     """Class to select appropriate viewer based on data characteristics."""
 
     def __init__(self):
-        # Fallback by dimensionality for unspecified patterns
-        self.viewer_types = {
-            1: "plot_1d",
-            2: "plot_2d",
-            3: "spectator",
-            4: "plot_4d",
-            5: "plot_5d",
-        }
+        # This selector is currently unused; viewer types are chosen
+        # directly from VIEWER_SELECTION_RULES in Manager.display_data.
+        self.viewer_types = {}
 
     def select_viewer(
         self,
@@ -447,8 +350,8 @@ class Manager:
             Viewer instance
             
         Examples:
-            # 3D data: states, spectral, spatial
-            display_data(data, 'states', 'spectral', 'spatial', title='Test', state_names=['I','Q'])
+            # 3D data: states, spectral, spatial_x
+            display_data(data, 'states', 'spectral', 'spatial_x', title='Test', state_names=['I','Q'])
 
         """
         # Whether to canonicalize axis order via DataRearranger.
@@ -458,19 +361,54 @@ class Manager:
         # Parse input arguments
         input_axes, states_info = self._parse_input_args(data, state_names, axes)
 
-        # Validate axis specification
+        # Validate axis specification (strings -> AxisType)
         validated_axes = self.dimensionality.validate_axis_specification(input_axes)
 
+        # Determine viewer type and target axis order from rules
+        declared_key = tuple(ax.value for ax in validated_axes)
+
         if rearrange:
-            # Determine target axis order (canonicalized) and rearrange data if needed
-            target_axes = self.rearranger.get_target_order(validated_axes)
+            # Look for a viewer rule whose axis multiset matches the declared axes.
+            declared_counter = Counter(validated_axes)
+            viewer_type: Optional[str] = None
+            target_axes: Optional[List[AxisType]] = None
+
+            for key, vtype in VIEWER_SELECTION_RULES.items():
+                if len(key) != len(validated_axes):
+                    continue
+                try:
+                    candidate_axes = [AxisType(name) for name in key]
+                except ValueError:
+                    # Skip rules that reference unknown axis names
+                    continue
+                if Counter(candidate_axes) == declared_counter:
+                    viewer_type = vtype
+                    target_axes = candidate_axes
+                    break
+
+            if viewer_type is None or target_axes is None:
+                raise ValueError(
+                    "No viewer rule compatible with declared axes "
+                    f"{declared_key}. Define a matching rule in VIEWER_SELECTION_RULES "
+                    "or adjust order=[...]."
+                )
+
+            # Rearrange data if necessary to match the viewer's target order
             if validated_axes != target_axes:
                 working_data = self.rearranger.rearrange_data(data, validated_axes, target_axes)
             else:
                 working_data = data
             working_axes = target_axes
         else:
-            # Use the declared axis order directly without rearranging
+            # Non-rearranging path: require an explicit exact-order rule
+            viewer_type = VIEWER_SELECTION_RULES.get(declared_key)
+            if viewer_type is None:
+                raise ValueError(
+                    "No viewer configured for axis order "
+                    f"{declared_key} with rearrange=False. "
+                    "Either enable rearrange=True or define a viewer rule "
+                    "for this axis configuration."
+                )
             working_data = data
             working_axes = validated_axes
 
@@ -498,21 +436,7 @@ class Manager:
                 label = scale_info['labels']['global']
                 print(f"Data scaled by factor {factor:.2e} ({label})")
         
-        # Select and create appropriate viewer
-        if rearrange:
-            viewer_type = self.viewer_selector.select_viewer(scaled_data.shape, working_axes)
-        else:
-            # Non-rearranging path: require an explicit rule in VIEWER_SELECTION_RULES
-            key = tuple(ax.value for ax in working_axes)
-            viewer_type = VIEWER_SELECTION_RULES.get(key)
-            if viewer_type is None:
-                raise ValueError(
-                    "No viewer configured for axis order "
-                    f"{key} with rearrange=False. "
-                    "Either enable rearrange=True or define a viewer rule "
-                    "for this axis configuration."
-                )
-        
+        # Select and create appropriate viewer (viewer_type is already chosen above)
         # Generate viewer-specific metadata
         viewer_metadata = self._generate_viewer_metadata(scaled_data, working_axes, states_info, title)
         
@@ -612,7 +536,13 @@ class Manager:
             elif axis_type == AxisType.SPECTRAL:
                 metadata['spectral_axis'] = i
                 metadata['n_spectral'] = data.shape[i]
-            elif axis_type == AxisType.SPATIAL:
+            elif axis_type == AxisType.SPATIAL_Y:
+                metadata['spatial_y_axis'] = i
+                if 'spatial_axes' not in metadata:
+                    metadata['spatial_axes'] = []
+                metadata['spatial_axes'].append(i)
+            elif axis_type == AxisType.SPATIAL_X:
+                metadata['spatial_x_axis'] = i
                 if 'spatial_axes' not in metadata:
                     metadata['spatial_axes'] = []
                 metadata['spatial_axes'].append(i)

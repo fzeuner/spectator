@@ -35,10 +35,10 @@ if __name__ == '__main__':
     data_3d = generate_example_data()  
     print(f"   3D data shape: {data_3d.shape}")
     
-    print("   Command: display_data(data, 'states', 'spectral', 'spatial', title='Example', state_names=['I','Q','U','V'])")
+    print("   Command: display_data(data, order=['states', 'spectral', 'spatial_x'], title='Example', state_names=['I','Q','U','V'])")
     try:
         from controllers.app_controller import display_data
-        result = display_data(data_3d, order=['states', 'spectral', 'spatial'], 
+        result = display_data(data_3d, order=['states', 'spectral', 'spatial_x'], 
                               title='Example', state_names=['I','Q','U','V'])
         print("   ✓ Successfully created viewer")
     except Exception as e:
