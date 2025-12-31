@@ -338,11 +338,27 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         except Exception:
             pass
 
-        # Docks
-        spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(800, 540))
-        spatial_dock = Dock(f"{base_name} scan", size=(360, 240))
-        spectrum_dock = Dock(f"{base_name} spectrum", size=(800, 240))
-        scan_dock = Dock(f"{base_name} scan", size=(800, 540))
+        # Docks (use FixedDockLabel workaround for consistent labels)
+        spectrum_image_dock = Dock(
+            f"{base_name} spectrum image",
+            size=(800, 540),
+            label=FixedDockLabel(f"{base_name} spectrum image"),
+        )
+        spatial_dock = Dock(
+            f"{base_name} scan",
+            size=(360, 240),
+            label=FixedDockLabel(f"{base_name} scan"),
+        )
+        spectrum_dock = Dock(
+            f"{base_name} spectrum",
+            size=(800, 240),
+            label=FixedDockLabel(f"{base_name} spectrum"),
+        )
+        scan_dock = Dock(
+            f"{base_name} scan",
+            size=(800, 540),
+            label=FixedDockLabel(f"{base_name} scan"),
+        )
 
         spectrum_image_dock.addWidget(win_image_spectrum)
         spatial_dock.addWidget(win_spatial)

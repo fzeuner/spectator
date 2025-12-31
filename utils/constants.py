@@ -33,8 +33,7 @@ HOVER_COLOR_DEFAULT = 'red'       # Default hover color for other moveable lines
 DEFAULT_FONT_SIZE = '6pt'
 DEFAULT_LABEL_SIZE = '8pt'
 
-# Viewer configuration
-SUPPORTED_VIEWER_TYPES = ['spectator', 'plot_1d', 'plot_2d', 'plot_4d', 'plot_5d']
+# Viewer / data limits
 MAX_STATES = 8
 MAX_SPATIAL_AXES = 2
 
@@ -157,9 +156,9 @@ __all__ = [
     'HOVER_COLOR_DEFAULT',
     'DEFAULT_FONT_SIZE',
     'DEFAULT_LABEL_SIZE',
-    'SUPPORTED_VIEWER_TYPES',
     'MAX_STATES',
     'MAX_SPATIAL_AXES',
+    'DEFAULT_DATA_TYPE',
     'ColorSchemes',
     'GrayPalette',
     'BluePalette',

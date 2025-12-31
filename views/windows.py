@@ -863,9 +863,9 @@ class StokesImageWindow(BasePlotWidget):
 
         self.plotItem.setMenuEnabled(False)
         self.plotItem.vb.mouseButtons = {
-            QtCore.Qt.LeftButton: pg.ViewBox.PanMode,
-            QtCore.Qt.MiddleButton: pg.ViewBox.RectMode,
-            QtCore.Qt.RightButton: None
+            QtCore.Qt.MouseButton.LeftButton: pg.ViewBox.PanMode,
+            QtCore.Qt.MouseButton.MiddleButton: pg.ViewBox.RectMode,
+            QtCore.Qt.MouseButton.RightButton: None
         }
         self.plotItem.vb.installEventFilter(self)
 

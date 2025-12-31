@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.file_model import datReader
 from controllers.app_controller import data_manager
 from controllers.app_controller import display_data
+from config.viewer_config import DEFAULT_AXIS_ORDERS
 
 from utils.config import load_config, ensure_example_config
 
@@ -138,26 +139,26 @@ class FileLoadingController(QtCore.QObject):
             # Get the filename for the title
             filename = getattr(self, '_current_filename', 'Unknown')
             
-            # Determine axes based on data shape
-            if len(data.shape) == 3:
-                # 3D data: assume (states, spectral, spatial)
-                axes = ('states', 'spectral', 'spatial')
-            elif len(data.shape) == 2:
-                # 2D data: assume (spectral, spatial)
-                axes = ('spectral', 'spatial')
-                state_names = None  # No states for 2D data
-            else:
-                raise ValueError(f"Unsupported data shape: {data.shape}")
-            
+            # Determine axis order based on data shape using central config
+            ndim = len(data.shape)
+            try:
+                axis_order = list(DEFAULT_AXIS_ORDERS[ndim])
+            except KeyError:
+                raise ValueError(f"Unsupported data shape for viewer auto-selection: {data.shape}")
+
+            # For 2D data there is no states axis -> ignore provided state_names
+            if ndim == 2:
+                state_names = None
+
             # Create title with filename
             title = f"Spectator - {filename}"
-            
-            # Use the data manager to display the data
+
+            # Use the public helper to display the data with explicit axis order
             viewer = display_data(
-                data, 
-                *axes, 
-                title=title, 
-                state_names=state_names
+                data,
+                order=axis_order,
+                title=title,
+                state_names=state_names,
             )
             
             return viewer

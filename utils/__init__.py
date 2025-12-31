@@ -10,7 +10,7 @@ from .constants import (
     MIN_LINE_DISTANCE,
     DEFAULT_N_STOKES, DEFAULT_N_WL, DEFAULT_N_X, 
     DEFAULT_LINE_WIDTH, ColorSchemes, GrayPalette, BluePalette,
-    SUPPORTED_VIEWER_TYPES, MAX_STATES, MAX_SPATIAL_AXES
+    MAX_STATES, MAX_SPATIAL_AXES
 )
 
 # Plotting utilities
@@ -35,7 +35,7 @@ __all__ = [
     'MIN_LINE_DISTANCE',
     'DEFAULT_N_STOKES', 'DEFAULT_N_WL', 'DEFAULT_N_X', 'DEFAULT_WAVELENGTH_RANGE',
     'DEFAULT_LINE_WIDTH', 'ColorSchemes', 'GrayPalette', 'BluePalette',
-    'SUPPORTED_VIEWER_TYPES', 'MAX_STATES', 'MAX_SPATIAL_AXES',
+    'MAX_STATES', 'MAX_SPATIAL_AXES',
     
     # Plotting utilities
     'add_line', 'add_crosshair', 'create_histogram',

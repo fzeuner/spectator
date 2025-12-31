@@ -12,6 +12,7 @@ from .file_controllers import FileListingController, FileLoadingController
 from utils.info_formatter import format_info_to_html
 from utils.colors import getWidgetColors
 from utils.fixed_dock_label import FixedDockLabel
+from config.viewer_config import DEFAULT_AXIS_ORDERS
 
 
 class FileBrowserApp(QtWidgets.QMainWindow):
@@ -165,14 +166,11 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         try:
             shape = getattr(data, 'shape', None)
             if isinstance(shape, tuple):
-                if len(shape) == 3:
-                    labels = ['states', 'spectral', 'spatial']
-                elif len(shape) == 2:
-                    labels = ['spectral', 'spatial']
-                elif len(shape) == 1:
-                    labels = ['spectral']
-                else:
-                    labels = [f"dim{i}" for i in range(len(shape))]
+                ndim = len(shape)
+                try:
+                    labels = list(DEFAULT_AXIS_ORDERS[ndim])
+                except KeyError:
+                    labels = [f"dim{i}" for i in range(ndim)]
                 dims_str = ", ".join(f"{label}={shape[i]}" for i, label in enumerate(labels))
                 print(f"Loaded array dims: {dims_str}")
         except Exception:

@@ -5,42 +5,35 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 from controllers.app_controller import display_data
-from PyQt5 import QtWidgets
 
 
 def main():
-    # Synthetic 4D data: (states, spatial_y, spectral, spatial_x)
-    S, Y, L, X = 2, 40, 100, 80
+# Synthetic 4D data: (states, spectral, spatial_y, spatial_x)
+    S, L, Y, X = 2, 100, 40, 80
     rng = np.random.default_rng(0)
-    data = rng.normal(scale=0.1, size=(S, Y, L, X)).astype(float)
-
-    # Add smooth spectral feature that varies with x and y
-    x = np.linspace(0, 2*np.pi, X)        # (X,)
-    y = np.linspace(-1, 1, Y)            # (Y,)
-    lam = np.linspace(400, 800, L)       # (L,)
-
-    sinx = np.sin(x)                     # (X,)
-    gauss = np.exp(-((lam-600.0)**2)/(2*40.0**2))  # (L,)
-    yscale = 1 + 0.3*y                   # (Y,)
-
-    # Proper outer-broadcast to (Y, L, X)
-    feature = yscale[:, None, None] * gauss[None, :, None] * sinx[None, None, :]
-
+    data = rng.normal(scale=0.05, size=(S, L, Y, X)).astype(float)
+    # Axes
+    x = np.linspace(-1, 1, X)        # spatial_x
+    y = np.linspace(-1, 1, Y)        # spatial_y
+    lam = np.linspace(400, 800, L)   # spectral (wavelength)
+    # Spatial 2D Gaussian bump in (y, x)
+    Xg, Yg = np.meshgrid(x, y, indexing="xy")      # shapes (Y, X)
+    spatial_bump = np.exp(-(Xg**2 + Yg**2) / (2 * 0.3**2))  # (Y, X)
+    # Spectral Gaussian line profile in λ
+    line_profile = np.exp(-((lam - 600.0) ** 2) / (2 * 30.0**2))  # (L,)
+    # Outer product to get (L, Y, X)
+    feature = line_profile[:, None, None] * spatial_bump[None, :, :]  # (L, Y, X)
+    # Add feature to each state with different scaling
     for s in range(S):
-        data[s] += (1 + 0.5*s) * feature
+        data[s] += (1.0 + 0.5 * s) * feature
 
     # Launch viewer
     win = display_data(
         data,
-        'states', 'spatial', 'spectral', 'spatial',
+        order=['states', 'spectral', 'spatial', 'spatial'],
         title='Scan Viewer Example',
-        state_names=['I', 'Q']
+        state_names=['I', 'Q'],
+        rearrange=True
     )
-    # If a QApplication exists and we received a window (meaning the viewer didn't start its own loop), enter the event loop
-    app = QtWidgets.QApplication.instance()
-    if app is not None and win is not None:
-        app.exec_()
-
-
 if __name__ == '__main__':
     main()

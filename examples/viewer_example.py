@@ -38,7 +38,7 @@ if __name__ == '__main__':
     print("   Command: display_data(data, 'states', 'spectral', 'spatial', title='Example', state_names=['I','Q','U','V'])")
     try:
         from controllers.app_controller import display_data
-        result = display_data(data_3d, 'states', 'spectral', 'spatial', 
+        result = display_data(data_3d, order=['states', 'spectral', 'spatial'], 
                               title='Example', state_names=['I','Q','U','V'])
         print("   ✓ Successfully created viewer")
     except Exception as e:

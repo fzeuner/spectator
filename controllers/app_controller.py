@@ -14,13 +14,14 @@ Supported dimensions:
 """
 
 import numpy as np
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import List, Tuple, Dict, Optional, Union, Any, Sequence
 from enum import Enum
 import warnings
 # local imports
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config.viewer_config import VIEWER_SELECTION_RULES
 
 class AxisType(Enum):
     """Enumeration of supported axis types."""
@@ -218,42 +219,44 @@ class DataRearranger:
 
 class ViewerSelector:
     """Class to select appropriate viewer based on data characteristics."""
-    
+
     def __init__(self):
+        # Fallback by dimensionality for unspecified patterns
         self.viewer_types = {
             1: "plot_1d",
-            2: "plot_2d", 
+            2: "plot_2d",
             3: "spectator",
             4: "plot_4d",
-            5: "plot_5d"
+            5: "plot_5d",
         }
-    
-    def select_viewer(self, data_shape: Tuple[int, ...], 
-                     axes: List[AxisType]) -> str:
-        """
-        Select appropriate viewer type based on data characteristics.
-        
+
+    def select_viewer(
+        self,
+        data_shape: Tuple[int, ...],
+        axes: List[AxisType],
+    ) -> str:
+        """Select appropriate viewer type based on data characteristics.
+
         Args:
             data_shape: Shape of the data array
             axes: Axis types in target order
-            
+
         Returns:
             Viewer type identifier
         """
         ndim = len(data_shape)
-        
-        # Special-case 4D scan viewer: states, spatial, spectral, spatial
-        if ndim == 4:
-            if (len(axes) == 4 and axes[0] == AxisType.STATES and 
-                axes[1] == AxisType.SPATIAL and axes[2] == AxisType.SPECTRAL and axes[3] == AxisType.SPATIAL):
-                return "scan_viewer"
-            # Fallback generic 4D
-            return self.viewer_types.get(4, "plot_4d")
-        
+
+        # First, try declarative config: map axis order -> viewer_type
+        key = tuple(ax.value for ax in axes)  # e.g. ("states", "spectral", "spatial")
+        viewer_type = VIEWER_SELECTION_RULES.get(key)
+        if viewer_type is not None:
+            return viewer_type
+
+        # Fallback by dimensionality
         if ndim in self.viewer_types:
             return self.viewer_types[ndim]
-        else:
-            raise ValueError(f"No viewer available for {ndim}D data")
+
+        raise ValueError(f"No viewer available for {ndim}D data with axes {key}")
 
 class DataScaler:
     """
@@ -424,7 +427,7 @@ class Manager:
         self.scaler = DataScaler()
         self.current_viewers = []  # Track open viewers for potential cleanup
     
-    def display_data(self, data: np.ndarray, 
+    def display_data(self, data: np.ndarray,
                     *axes: str,
                     title: str = 'Data Viewer',
                     state_names: Optional[List[str]] = None,
@@ -448,24 +451,32 @@ class Manager:
             display_data(data, 'states', 'spectral', 'spatial', title='Test', state_names=['I','Q'])
 
         """
+        # Whether to canonicalize axis order via DataRearranger.
+        # Defaults to True; can be disabled via the public helper's rearrange=False.
+        rearrange: bool = bool(kwargs.pop('rearrange', True))
+
         # Parse input arguments
         input_axes, states_info = self._parse_input_args(data, state_names, axes)
-        
+
         # Validate axis specification
         validated_axes = self.dimensionality.validate_axis_specification(input_axes)
-        
-        # Determine target axis order
-        target_axes = self.rearranger.get_target_order(validated_axes)
-        
-        # Rearrange data if necessary
-        if validated_axes != target_axes:
-            rearranged_data = self.rearranger.rearrange_data(data, validated_axes, target_axes)
+
+        if rearrange:
+            # Determine target axis order (canonicalized) and rearrange data if needed
+            target_axes = self.rearranger.get_target_order(validated_axes)
+            if validated_axes != target_axes:
+                working_data = self.rearranger.rearrange_data(data, validated_axes, target_axes)
+            else:
+                working_data = data
+            working_axes = target_axes
         else:
-            rearranged_data = data
-        
+            # Use the declared axis order directly without rearranging
+            working_data = data
+            working_axes = validated_axes
+
         # Apply data scaling for better visualization
         auto_scale = kwargs.get('auto_scale', True)  # Allow disabling auto-scaling
-        scaled_data = self.scaler.scale_data(rearranged_data, target_axes, auto_scale=auto_scale)
+        scaled_data = self.scaler.scale_data(working_data, working_axes, auto_scale=auto_scale)
         
         # Print current code path being used
         current_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -488,10 +499,22 @@ class Manager:
                 print(f"Data scaled by factor {factor:.2e} ({label})")
         
         # Select and create appropriate viewer
-        viewer_type = self.viewer_selector.select_viewer(scaled_data.shape, target_axes)
+        if rearrange:
+            viewer_type = self.viewer_selector.select_viewer(scaled_data.shape, working_axes)
+        else:
+            # Non-rearranging path: require an explicit rule in VIEWER_SELECTION_RULES
+            key = tuple(ax.value for ax in working_axes)
+            viewer_type = VIEWER_SELECTION_RULES.get(key)
+            if viewer_type is None:
+                raise ValueError(
+                    "No viewer configured for axis order "
+                    f"{key} with rearrange=False. "
+                    "Either enable rearrange=True or define a viewer rule "
+                    "for this axis configuration."
+                )
         
         # Generate viewer-specific metadata
-        viewer_metadata = self._generate_viewer_metadata(scaled_data, target_axes, states_info, title)
+        viewer_metadata = self._generate_viewer_metadata(scaled_data, working_axes, states_info, title)
         
         # Add scaling information to metadata for potential display
         viewer_metadata['scale_info'] = scale_info
@@ -647,38 +670,75 @@ class Manager:
                 'message': f"Viewer for {len(data.shape)}D data with axes {metadata['axes']} is ready for implementation"
             }
 
+from config.viewer_config import DEFAULT_AXIS_ORDERS
+
 # Global instance for easy access
 data_manager = Manager()
 
-# Convenience function that matches the requested interface
-def display_data(data: np.ndarray, 
-                *axes: str,
+
+def display_data(data: np.ndarray,
+                order: Optional[Sequence[str]] = None,
                 title: str = 'Data Viewer',
                 state_names: Optional[List[str]] = None,
+                rearrange: bool = True,
                 **kwargs) -> Any:
-    """
-    Display multi-dimensional data with flexible axis specification.
-    
-    This function provides a flexible interface for visualizing multi-dimensional
-    spectral data. It automatically handles data rearrangement and selects the
-    appropriate viewer based on the data structure.
-    
+    """Display multi-dimensional data with flexible axis specification.
+
+    This function provides a single, explicit way to define axis semantics via
+    the ``order`` keyword. If ``order`` is omitted, a default axis order is
+    looked up from configuration based on ``data.ndim``.
+
+    Examples:
+
+        display_data(data, order=['states', 'spectral', 'spatial'])
+        display_data(data, order=['states', 'spatial', 'spectral', 'spatial'])
+
     Args:
         data: Input data array (1-5 dimensions)
-        *axes: Axis type specifications in data order ('states', 'spectral', 'spatial', 'time')
+        order: Sequence of axis type specifications in data order
+               ('states', 'spectral', 'spatial', 'time'). If ``None``, a
+               default order will be selected from ``DEFAULT_AXIS_ORDERS``
+               using ``data.ndim``.
+        rearrange: If True (default), the Manager may rearrange axes to a
+                   canonical target order before selecting a viewer. If
+                   False, the Manager will attempt to find a viewer rule
+                   that matches the declared order directly and will raise a
+                   clear error if none exists.
         title: Window title for the viewer
         state_names: Optional list of names for states axis (e.g., ['I', 'Q', 'U', 'V'])
-                    If None and 'states' axis is present, will use numbers ['1', '2', '3', ...]
+                     If None and 'states' axis is present, will use numbers
+                     ['1', '2', '3', ...].
         **kwargs: Additional parameters for specific viewers
-        
+
     Returns:
         Viewer instance or viewer information
-        
-    Examples:
-        # 3D data: states, spectral, spatial
-
     """
-    return data_manager.display_data(data, *axes, title=title, state_names=state_names, **kwargs)
+
+    if order is None:
+        try:
+            axis_order = DEFAULT_AXIS_ORDERS[data.ndim]
+        except KeyError:
+            raise ValueError(
+                f"No default axis order configured for data with {data.ndim} dimensions. "
+                "Please specify order=[...] explicitly."
+            )
+    else:
+        axis_order = tuple(order)
+
+    if len(axis_order) != data.ndim:
+        raise ValueError(
+            f"Length of axis order ({len(axis_order)}) must match data dimensions ({data.ndim}). "
+            f"Provided order: {axis_order}, data shape: {data.shape}"
+        )
+
+    return data_manager.display_data(
+        data,
+        *axis_order,
+        title=title,
+        state_names=state_names,
+        rearrange=rearrange,
+        **kwargs,
+    )
 
 if __name__ == "__main__":
     # Test the data manager with example data
@@ -692,8 +752,9 @@ if __name__ == "__main__":
     
     # Test 1: Current format (should work with existing viewer)
     print("\n1. Testing current format (states, spectral, spatial):")
+    print("   Command: display_data(data, order=['states', 'spectral', 'spatial'], title='Current Format', state_names=['I','Q','U','V'])")
     try:
-        result1 = display_data(test_data, 'states', 'spectral', 'spatial', 
+        result1 = display_data(test_data, order=['states', 'spectral', 'spatial'], 
                               title='Current Format', state_names=['I', 'Q', 'U', 'V'])
         print("✓ Current format test passed")
     except Exception as e:
@@ -701,8 +762,9 @@ if __name__ == "__main__":
     
     # Test 2: Rearranged format
     print("\n2. Testing rearranged format (states, spatial, spectral):")
+    print("   Command: display_data(data, order=['states', 'spatial', 'spectral'], title='Rearranged Format', state_names=['I','Q','U','V'])")
     try:
-        result2 = display_data(test_data, 'states', 'spatial', 'spectral',
+        result2 = display_data(test_data, order=['states', 'spatial', 'spectral'],
                               title='Rearranged Format', state_names=['I', 'Q', 'U', 'V'])
         print("✓ Rearranged format test passed")
     except Exception as e:
@@ -710,17 +772,19 @@ if __name__ == "__main__":
     
     # Test 3: Default state names
     print("\n3. Testing default state names (states, spectral, spatial):")
+    print("   Command: display_data(data, order=['states', 'spectral', 'spatial'], title='Default Names')")
     try:
-        result3 = display_data(test_data, 'states', 'spectral', 'spatial', title='Default Names')
+        result3 = display_data(test_data, order=['states', 'spectral', 'spatial'], title='Default Names')
         print("✓ Default state names test passed")
     except Exception as e:
         print(f"✗ Default state names test failed: {e}")
     
     # Test 4: 2D data
     print("\n4. Testing 2D data (spectral, spatial):")
+    print("   Command: display_data(data_2d, order=['spectral', 'spatial'], title='2D Data')")
     try:
         data_2d = test_data[0, :, :]  # Take first Stokes parameter
-        result4 = display_data(data_2d, 'spectral', 'spatial', title='2D Data')
+        result4 = display_data(data_2d, order=['spectral', 'spatial'], title='2D Data')
         print("✓ 2D data test passed")
     except Exception as e:
         print(f"✗ 2D data test failed: {e}")
