@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     
     from controllers import Manager
-    from utils.data_utils import generate_example_data
+    from utils.data_utils import generate_example_data_3d
     
     IMPORTS_AVAILABLE = True
 except ImportError as e:
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     
     # Generate example data
     print("\nGenerating test data...")
-    data_3d = generate_example_data()  
+    data_3d = generate_example_data_3d()  
     print(f"   3D data shape: {data_3d.shape}")
     
     print("   Command: display_data(data, order=['states', 'spectral', 'spatial_x'], title='Example', state_names=['I','Q','U','V'])")

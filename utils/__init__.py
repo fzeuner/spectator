@@ -24,7 +24,7 @@ from .plotting import (
 
 # Data utilities
 from .data_utils import (
-    generate_example_data, validate_data_array
+    generate_example_data_3d, generate_example_data_4d
 )
 
 # Color utilities
@@ -45,9 +45,7 @@ __all__ = [
     'create_y_limit_controls', 'apply_dark_theme', 'apply_light_theme',
     
     # Data utilities
-    'generate_example_data', 'validate_data_array', 'validate_data', 'normalize_data',
-    'calculate_statistics', 'resample_data', 'extract_spectral_line',
-    'apply_spectral_smoothing', 'detect_spectral_lines',
+    'generate_example_data_3d', 'generate_example_data_4d'
     
     # Color utilities
     'getWidgetColors', 'get_crosshair_colors',

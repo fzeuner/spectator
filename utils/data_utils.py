@@ -10,7 +10,7 @@ from typing import Tuple, Optional, List, Union
 from .constants import DEFAULT_N_STOKES, DEFAULT_N_WL, DEFAULT_N_X
 
 
-def generate_example_data(n_stokes: int = DEFAULT_N_STOKES,
+def generate_example_data_3d(n_stokes: int = DEFAULT_N_STOKES,
                          n_wl: int = DEFAULT_N_WL, 
                          n_x: int = DEFAULT_N_X,
                          add_noise: bool = True,
@@ -54,32 +54,23 @@ def generate_example_data(n_stokes: int = DEFAULT_N_STOKES,
     
     return data
 
+def generate_example_data_4d():
+    S, L, Y, X = 2, 100, 40, 80
+    rng = np.random.default_rng(0)
+    data = rng.normal(scale=0.05, size=(S, L, Y, X)).astype(float)
+    # Axes
+    x = np.linspace(-1, 1, X)        # spatial_x
+    y = np.linspace(-1, 1, Y)        # spatial_y
+    lam = np.linspace(400, 800, L)   # spectral (wavelength)
+    # Spatial 2D Gaussian bump in (y, x)
+    Xg, Yg = np.meshgrid(x, y, indexing="xy")      # shapes (Y, X)
+    spatial_bump = np.exp(-(Xg**2 + Yg**2) / (2 * 0.3**2))  # (Y, X)
+    # Spectral Gaussian line profile in λ
+    line_profile = np.exp(-((lam - 600.0) ** 2) / (2 * 30.0**2))  # (L,)
+    # Outer product to get (L, Y, X)
+    feature = line_profile[:, None, None] * spatial_bump[None, :, :]  # (L, Y, X)
+    # Add feature to each state with different scaling
+    for s in range(S):
+        data[s] += (1.0 + 0.5 * s) * feature
 
-def validate_data_array(data: np.ndarray, 
-                       min_dim: int = 1, 
-                       max_dim: int = 5) -> tuple:
-    """
-    Validate that a data array meets basic requirements.
-    
-    Args:
-        data: Data array to validate
-        min_dim: Minimum allowed dimensions
-        max_dim: Maximum allowed dimensions
-        
-    Returns:
-        Tuple of (is_valid, error_message)
-    """
-    if not isinstance(data, np.ndarray):
-        return False, "Data must be a numpy array"
-    
-    if data.ndim < min_dim or data.ndim > max_dim:
-        return False, f"Data must have between {min_dim} and {max_dim} dimensions, got {data.ndim}"
-    
-    if data.size == 0:
-        return False, "Data array is empty"
-    
-    if not np.isfinite(data).all():
-        return False, "Data contains non-finite values (NaN or Inf)"
-    
-    return True, "Data is valid"
-
+    return data
