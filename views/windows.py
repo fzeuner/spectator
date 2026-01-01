@@ -45,17 +45,16 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
-        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 0, moveable=True)
+        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 90, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
-        initialize_spectrum_plot_item(self.plotItem, y_label="x", x_label = "", x_units = "", y_units = "pixel")
+        initialize_spectrum_plot_item(self.plotItem, y_label="z", x_label="x", x_units="pixel")
         
         # Use BasePlotWidget methods for standardized axis setup
         self.setup_standard_axes(left_width=30, top_height=15)
-        self.setup_custom_ticks(spatial_range=len(self.x))
-        self.configure_axis_styling(hide_left_label=True, right_label="x", right_units="pixel")
+        self.setup_custom_ticks(spectral_range=len(self.x))
 
     def _setup_connections(self):
         """Connects signals to slots."""
@@ -65,7 +64,7 @@ class StokesSpatialWindow(BasePlotWidget):
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
         self.plot_data = self.full_data[self.current_wl_idx, :]
-        self.plot_curve.setData(self.plot_data, self.x)
+        self.plot_curve.setData(self.x, self.plot_data)
 
         # Set initial hLine position to center
         initial_x = (self.x[0] + self.x[-1]) / 2 if self.x.size > 1 else (self.x[0] if self.x.size > 0 else 0)
@@ -124,7 +123,7 @@ class StokesSpatialWindow(BasePlotWidget):
 
             self.current_wl_idx_avg = wl_idx_c
             self.plot_data_avg = (self.full_data[wl_idx_l:wl_idx_h,:]).mean(axis=0)
-            self.plot_curve_avg.setData(self.plot_data_avg, self.x)
+            self.plot_curve_avg.setData(self.x, self.plot_data_avg)
             self._update_label_wl_avg()     
             
     def clear_averaging_regions(self):
@@ -173,17 +172,17 @@ class StokesSpatialWindow(BasePlotWidget):
         self.update_spatial_data_wl_avg(x_idx_low, x_idx_center, x_idx_high)
 
     def update_spatial_range(self, min_val, max_val):
-        """Updates the spatial (x pixel) axis range of the spatial plot (y-axis)."""
-        set_plot_wavelength_range(self.plotItem, self.x, min_val, max_val, axis='y')
+        """Updates the spatial (x pixel) axis range of the spatial plot (x-axis)."""
+        set_plot_wavelength_range(self.plotItem, self.x, min_val, max_val, axis='x')
 
     def reset_spatial_range(self):
-        """Resets the spatial (x pixel) axis range to full range on the spatial plot (y-axis)."""
-        reset_plot_wavelength_range(self.plotItem, self.x, axis='y')
+        """Resets the spatial (x pixel) axis range to full range on the spatial plot (x-axis)."""
+        reset_plot_wavelength_range(self.plotItem, self.x, axis='x')
     
     def set_spatial_limits(self, y_min: float, y_max: float):
         """Set Y-axis limits based on spatial range from SpectrumImageWindow zoom."""
         try:
-            self.plotItem.setYRange(y_min, y_max, padding=0)
+            self.plotItem.setXRange(y_min, y_max, padding=0)
         except Exception:
             pass
     
@@ -208,7 +207,7 @@ class StokesSpatialWindow(BasePlotWidget):
         
         self.current_spectral_idx = spectral_idx
         self.plot_data = self.full_data[spectral_idx, :]
-        self.plot_curve.setData(self.plot_data, self.x)
+        self.plot_curve.setData(self.x, self.plot_data)
         self._update_label()  # Use consistent label format without λ
     
     def set_spectral_limits(self, x_min: float, x_max: float):
@@ -217,6 +216,24 @@ class StokesSpatialWindow(BasePlotWidget):
             self.plotItem.setXRange(x_min, x_max, padding=0)
         except Exception:
             pass
+
+    def set_full_data(self, data: np.ndarray):
+        if data.ndim != 2:
+            raise ValueError(f"StokesSpatialWindow expects 2D data (spectral, x); got shape {data.shape}")
+
+        self.full_data = data
+        self.spectral = np.arange(self.full_data.shape[0])
+        self.x = np.arange(self.full_data.shape[1])
+
+        # Keep current indices in bounds
+        self.current_wl_idx = int(np.clip(getattr(self, 'current_wl_idx', 0), 0, self.full_data.shape[0] - 1))
+        self.current_spectral_idx = int(np.clip(getattr(self, 'current_spectral_idx', self.current_wl_idx), 0, self.full_data.shape[0] - 1))
+
+        # Refresh plot using spectral index if available, otherwise current_wl_idx
+        idx = self.current_spectral_idx
+        self.plot_data = self.full_data[idx, :]
+        self.plot_curve.setData(self.x, self.plot_data)
+        self._update_label()
 
 class StokesSpectrumWindow(BasePlotWidget):
     yRangeChanged = QtCore.pyqtSignal(tuple)  # Emit (min, max)
@@ -379,6 +396,145 @@ class StokesSpectrumWindow(BasePlotWidget):
         
         # Clear the label
         self.label_avg.setText("")         
+
+    def set_full_data(self, data: np.ndarray):
+        if data.ndim != 2:
+            raise ValueError(f"StokesSpectrumWindow expects 2D data (spectral, x); got shape {data.shape}")
+
+        self.full_data = data
+        self.spectral = np.arange(self.full_data.shape[0])
+
+        # Clamp current_x_idx
+        self.current_x_idx = int(np.clip(getattr(self, 'current_x_idx', 0), 0, self.full_data.shape[1] - 1))
+
+        # Refresh plot
+        self.plot_data = self.full_data[:, self.current_x_idx]
+        self.plot_curve.setData(self.spectral, self.plot_data)
+        self._emit_y_range_changed(None, self.plotItem.viewRange()[1])
+        self._update_label()
+
+
+class StokesSpatialYWindow(BasePlotWidget):
+    yChanged = QtCore.pyqtSignal(float)
+
+    def __init__(self, data_cube: np.ndarray, stokes_index: int, name: str):
+        super().__init__(None)
+
+        self.name = name + " spatial y"
+        self.stokes_index = stokes_index
+        self.full_cube = data_cube
+        if self.full_cube.ndim != 3:
+            raise ValueError(f"StokesSpatialYWindow expects 3D data (y, spectral, x); got shape {self.full_cube.shape}")
+
+        self.n_y, self.n_spectral, self.n_x = self.full_cube.shape
+        self.y_pixels = np.arange(self.n_y)
+
+        self.current_y_idx = int(self.n_y // 2) if self.n_y > 0 else 0
+        self.current_spectral_idx = int(self.n_spectral // 2) if self.n_spectral > 0 else 0
+        self.current_x_idx = int(self.n_x // 2) if self.n_x > 0 else 0
+
+        self.plot_curve = pg.PlotDataItem()
+        self.plotItem.addItem(self.plot_curve)
+
+        colors = getWidgetColors()
+        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 0, moveable=True)
+        self.hLine.sigPositionChanged.connect(self._on_hline_moved)
+
+        self.label = pg.LabelItem(justify='left', size='8pt')
+        self.graphics_widget.addItem(self.label, row=1, col=1)
+
+        # x-axis: intensity z, y-axis: spatial_y
+        initialize_spectrum_plot_item(self.plotItem, y_label="y", y_units="pixel", x_label="z", x_units="")
+        self.setup_standard_axes(left_width=30, top_height=15)
+        self.setup_custom_ticks(spatial_range=len(self.y_pixels))
+        self.configure_axis_styling(hide_left_label=True, right_label="y", right_units="pixel")
+
+        self._refresh_profile()
+        self.hLine.setPos(float(self.current_y_idx))
+
+    def _profile_data(self) -> np.ndarray:
+        if self.n_y == 0:
+            return np.array([])
+        return self.full_cube[:, self.current_spectral_idx, self.current_x_idx]
+
+    def _refresh_profile(self):
+        prof = self._profile_data()
+        # Plot z horizontally, y vertically
+        self.plot_curve.setData(prof, self.y_pixels)
+        self._update_label()
+
+    def _update_label(self):
+        y_pos = float(self.hLine.value()) if hasattr(self, 'hLine') else float(self.current_y_idx)
+        y_idx = int(np.clip(np.round(y_pos), 0, self.n_y - 1)) if self.n_y > 0 else 0
+
+        z = np.nan
+        if self.n_y > 0:
+            z = float(self.full_cube[y_idx, self.current_spectral_idx, self.current_x_idx])
+        self.label.setText(f"y={y_pos:.0f}, z={z:.5f}", size='8pt')
+
+    def _on_hline_moved(self):
+        y_pos = float(self.hLine.value())
+        self.current_y_idx = int(np.clip(np.round(y_pos), 0, self.n_y - 1)) if self.n_y > 0 else 0
+        self.yChanged.emit(y_pos)
+        self._update_label()
+
+    def set_full_cube(self, data_cube: np.ndarray):
+        if data_cube.ndim != 3:
+            raise ValueError(f"StokesSpatialYWindow expects 3D data (y, spectral, x); got shape {data_cube.shape}")
+        self.full_cube = data_cube
+        self.n_y, self.n_spectral, self.n_x = self.full_cube.shape
+        self.y_pixels = np.arange(self.n_y)
+
+        self.current_y_idx = int(np.clip(self.current_y_idx, 0, max(self.n_y - 1, 0)))
+        self.current_spectral_idx = int(np.clip(self.current_spectral_idx, 0, max(self.n_spectral - 1, 0)))
+        self.current_x_idx = int(np.clip(self.current_x_idx, 0, max(self.n_x - 1, 0)))
+        self._refresh_profile()
+
+    # Keep naming consistent with other windows
+    def set_full_data(self, data: np.ndarray):
+        self.set_full_cube(data)
+
+    def update_profile(self, spectral_idx: int, x_idx: int):
+        if self.n_spectral == 0 or self.n_x == 0:
+            return
+        self.current_spectral_idx = int(np.clip(spectral_idx, 0, self.n_spectral - 1))
+        self.current_x_idx = int(np.clip(x_idx, 0, self.n_x - 1))
+        self._refresh_profile()
+
+    def update_spatial_data_spectral(self, spectral_idx: int):
+        """Alias to mirror StokesSpatialWindow.update_spatial_data_spectral."""
+        self.update_spectral_index(int(spectral_idx))
+
+    @QtCore.pyqtSlot(float)
+    def update_y_line(self, y_pos: float):
+        if not hasattr(self, 'hLine'):
+            return
+        if np.isclose(self.hLine.value(), y_pos):
+            return
+        self.hLine.blockSignals(True)
+        try:
+            self.hLine.setPos(float(y_pos))
+            self.current_y_idx = int(np.clip(np.round(y_pos), 0, self.n_y - 1)) if self.n_y > 0 else 0
+            self._update_label()
+        finally:
+            self.hLine.blockSignals(False)
+
+    @QtCore.pyqtSlot(float, float, int)
+    def update_from_spectrum_image_crosshair(self, xpos_wl: float, ypos_spatial_x: float, source_stokes_index: int):
+        spectral_idx = int(np.clip(np.round(xpos_wl), 0, self.n_spectral - 1)) if self.n_spectral > 0 else 0
+        x_idx = int(np.clip(np.round(ypos_spatial_x), 0, self.n_x - 1)) if self.n_x > 0 else 0
+        self.update_profile(spectral_idx, x_idx)
+
+    @QtCore.pyqtSlot(float, float, int)
+    def update_from_scan_crosshair(self, xpos_spatial_x: float, ypos_spatial_y: float, source_stokes_index: int):
+        """Update y profile from scan-image crosshair (x=spatial_x, y=spatial_y)."""
+        x_idx = int(np.clip(np.round(xpos_spatial_x), 0, self.n_x - 1)) if self.n_x > 0 else 0
+        self.update_profile(self.current_spectral_idx, x_idx)
+        self.update_y_line(float(ypos_spatial_y))
+
+    @QtCore.pyqtSlot(int)
+    def update_spectral_index(self, spectral_idx: int):
+        self.update_profile(int(spectral_idx), self.current_x_idx)
 
 class StokesSpectrumImageWindow(BasePlotWidget):
     crosshairMoved = QtCore.pyqtSignal(float, float, int)
@@ -753,6 +909,50 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             # Re-enable signals
             self.vLine.blockSignals(False)
             self.hLine.blockSignals(False)
+
+    def set_data(self, data: np.ndarray):
+        if data.ndim != 2:
+            raise ValueError(f"StokesSpectrumImageWindow expects 2D data (spectral, x); got shape {data.shape}")
+
+        self.data = data
+        self.n_spectral, self.n_x_pixel = self.data.shape
+        self.spectral_pixels = np.arange(self.n_spectral)
+        self.spatial_pixels = np.arange(self.n_x_pixel)
+
+        # Update histogram/image
+        axis_order = pg.getConfigOption('imageAxisOrder')
+        if axis_order == 'row-major':
+            img = self.data.T
+        else:
+            img = self.data
+        self.image_item.setImage(img)
+
+        x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
+        x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
+        y_min_x = self.spatial_pixels[0] if self.spatial_pixels.size > 0 else 0
+        y_max_x = self.spatial_pixels[-1] if self.spatial_pixels.size > 0 else self.n_x_pixel
+        self.image_item.setRect(x_min_spectral, y_min_x, x_max_spectral - x_min_spectral, y_max_x - y_min_x)
+
+        # Update managers/clamps
+        if hasattr(self, 'spectral_manager'):
+            self.spectral_manager.set_data_range(self.n_spectral)
+        if hasattr(self, 'spatial_manager'):
+            self.spatial_manager.set_data_range(self.n_x_pixel)
+
+        # Clamp view and crosshair to new bounds
+        try:
+            self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)
+            self.plotItem.setYRange(0, self.n_x_pixel - 1, padding=0)
+        except Exception:
+            pass
+
+        if hasattr(self, 'vLine') and hasattr(self, 'hLine'):
+            x = float(np.clip(self.vLine.value(), 0, self.n_spectral - 1))
+            y = float(np.clip(self.hLine.value(), 0, self.n_x_pixel - 1))
+            self.vLine.setPos(x)
+            self.hLine.setPos(y)
+            self.last_valid_crosshair_pos = (x, y)
+            self.updateLabelFromCrosshair(x, y)
     
     def clear_averaging_regions(self):
         """Clear all averaging regions and reset to clean state."""
@@ -809,6 +1009,216 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         """Helper method to activate spatial averaging button."""
         if hasattr(self, 'control_widget') and hasattr(self.control_widget, 'activate_spatial_button'):
             self.control_widget.activate_spatial_button()
+
+
+class StokesSpectrumYImageWindow(BasePlotWidget):
+    """Spectrum image with axes (spectral vs spatial_y).
+
+    Input data shape: (spectral, y).
+    """
+
+    crosshairMoved = QtCore.pyqtSignal(float, float, int)  # spectral_idx, y_idx, stokes_index
+
+    def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
+        super().__init__(None)
+
+        self.stokes_index = stokes_index
+        self.name = name
+        self.data = data
+        self.scale_info = scale_info
+        if self.data.ndim != 2:
+            raise ValueError(f"StokesSpectrumYImageWindow expects 2D data (spectral, y); got shape {self.data.shape}")
+
+        self.n_spectral, self.n_y_pixel = self.data.shape
+        self.spectral_pixels = np.arange(self.n_spectral)
+        self.y_pixels = np.arange(self.n_y_pixel)
+
+        self._setup_image_plot()
+        self._setup_axes()
+        self._setup_crosshair()
+
+    def _setup_image_plot(self):
+        self.image_item = pg.ImageItem()
+        self.plotItem.addItem(self.image_item)
+        self.histogram = create_histogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
+
+        axis_order = pg.getConfigOption('imageAxisOrder')
+        img = self.data.T if axis_order == 'row-major' else self.data
+        self.image_item.setImage(img)
+
+        x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
+        x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
+        y_min = self.y_pixels[0] if self.y_pixels.size > 0 else 0
+        y_max = self.y_pixels[-1] if self.y_pixels.size > 0 else self.n_y_pixel
+        self.image_item.setRect(x_min_spectral, y_min, x_max_spectral - x_min_spectral, y_max - y_min)
+
+        self.plotItem.setMenuEnabled(False)
+        self.plotItem.vb.mouseButtons = {
+            QtCore.Qt.MouseButton.LeftButton: pg.ViewBox.PanMode,
+            QtCore.Qt.MouseButton.MiddleButton: pg.ViewBox.RectMode,
+            QtCore.Qt.MouseButton.RightButton: None
+        }
+        self.plotItem.vb.installEventFilter(self)
+
+    def _setup_axes(self):
+        initialize_image_plot_item(
+            self.plotItem,
+            y_values=True,
+            y_label="y",
+            y_units="pixel",
+            x_label="λ",
+            x_units="pixel",
+        )
+        self.setup_standard_axes(left_width=30, top_height=15)
+        self.setup_custom_ticks(spectral_range=self.n_spectral, spatial_range=self.n_y_pixel)
+        self.configure_axis_styling(hide_left_label=True, right_label="y", right_units="pixel")
+        self.setup_viewbox_limits(x_max=self.n_spectral - 1, y_max=self.n_y_pixel - 1, min_range=1.0, enable_rect_zoom=True)
+        try:
+            self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)
+            self.plotItem.setYRange(0, self.n_y_pixel - 1, padding=0)
+        except Exception:
+            pass
+
+    def _setup_crosshair(self):
+        colors = getWidgetColors()
+        self.vLine, self.hLine = add_crosshair(self.plotItem, colors.get('crosshair', 'white'), colors.get('crosshair', 'white'))
+        self.plotItem.scene().sigMouseMoved.connect(self._on_mouse_moved)
+        self.plotItem.scene().sigMouseClicked.connect(self._on_mouse_clicked)
+        self.crosshair_locked = False
+
+        mid_spectral = (self.n_spectral - 1) / 2
+        mid_y = (self.n_y_pixel - 1) / 2
+        self.vLine.setPos(mid_spectral)
+        self.hLine.setPos(mid_y)
+
+        self.label = pg.LabelItem(justify='left', size='8pt')
+        self.graphics_widget.addItem(self.label, row=1, col=1)
+        self._update_label(mid_spectral, mid_y)
+
+    def _update_label(self, xpos_wl: float, ypos_y: float):
+        index_spectral = np.clip(int(np.round(xpos_wl)), 0, self.n_spectral - 1)
+        index_y = np.clip(int(np.round(ypos_y)), 0, self.n_y_pixel - 1)
+        intensity = self.data[index_spectral, index_y]
+        self.label.setText(f"l: {xpos_wl:.0f}, y: {ypos_y:.0f}, z: {intensity:.5f}", size='8pt')
+
+    def _on_mouse_clicked(self, event):
+        if event.double():
+            p = self.plotItem.vb.mapSceneToView(event.scenePos())
+            if not self.crosshair_locked:
+                self.vLine.setPos(p.x())
+                self.hLine.setPos(p.y())
+                self._update_label(p.x(), p.y())
+            self.crosshair_locked = not self.crosshair_locked
+
+    def _on_mouse_moved(self, pos: QtCore.QPointF):
+        if self.crosshair_locked:
+            return
+        cross = update_crosshair_from_mouse(self.plotItem, self.vLine, self.hLine, pos)
+        if cross is None:
+            return
+        x, y = cross
+        self._update_label(x, y)
+        self.crosshairMoved.emit(x, y, self.stokes_index)
+
+    @QtCore.pyqtSlot(float, float)
+    def set_crosshair_position(self, xpos_wl: float, ypos_y: float):
+        if self.crosshair_locked:
+            return
+        self.vLine.blockSignals(True)
+        self.hLine.blockSignals(True)
+        try:
+            self.vLine.setPos(xpos_wl)
+            self.hLine.setPos(ypos_y)
+            self._update_label(xpos_wl, ypos_y)
+        finally:
+            self.vLine.blockSignals(False)
+            self.hLine.blockSignals(False)
+
+    def set_data(self, data: np.ndarray):
+        if data.ndim != 2:
+            raise ValueError(f"StokesSpectrumYImageWindow expects 2D data (spectral, y); got shape {data.shape}")
+        self.data = data
+        self.n_spectral, self.n_y_pixel = self.data.shape
+        self.spectral_pixels = np.arange(self.n_spectral)
+        self.y_pixels = np.arange(self.n_y_pixel)
+
+        axis_order = pg.getConfigOption('imageAxisOrder')
+        img = self.data.T if axis_order == 'row-major' else self.data
+        self.image_item.setImage(img)
+
+        x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
+        x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
+        y_min = self.y_pixels[0] if self.y_pixels.size > 0 else 0
+        y_max = self.y_pixels[-1] if self.y_pixels.size > 0 else self.n_y_pixel
+        self.image_item.setRect(x_min_spectral, y_min, x_max_spectral - x_min_spectral, y_max - y_min)
+
+        try:
+            self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)
+            self.plotItem.setYRange(0, self.n_y_pixel - 1, padding=0)
+        except Exception:
+            pass
+
+        if hasattr(self, 'vLine') and hasattr(self, 'hLine'):
+            x = float(np.clip(self.vLine.value(), 0, self.n_spectral - 1))
+            y = float(np.clip(self.hLine.value(), 0, self.n_y_pixel - 1))
+            self.vLine.setPos(x)
+            self.hLine.setPos(y)
+            self._update_label(x, y)
+
+    def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
+        set_plot_wavelength_range(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x')
+
+    def reset_spectral_range(self):
+        reset_plot_wavelength_range(self.plotItem, self.spectral_pixels, axis='x')
+
+
+class AverageSpectrumWindow(BasePlotWidget):
+    spectralIndexChanged = QtCore.pyqtSignal(int)
+
+    def __init__(self, data: np.ndarray, name: str = "Average spectrum", scale_info: dict = None):
+        super().__init__(None)
+        self.name = name
+        self.scale_info = scale_info
+
+        if data.ndim != 3:
+            raise ValueError(f"AverageSpectrumWindow expects 3D data (y, spectral, x); got shape {data.shape}")
+
+        self.full_data = data
+        self.n_y, self.n_spectral, self.n_x = self.full_data.shape
+        self.spectral = np.arange(self.n_spectral)
+
+        self.plot_curve = pg.PlotDataItem()
+        self.plotItem.addItem(self.plot_curve)
+
+        colors = getWidgetColors()
+        self.vLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 90, moveable=True)
+        self.vLine.sigPositionChanged.connect(self._on_vline_moved)
+
+        initialize_spectrum_plot_item(self.plotItem, y_label="z", x_label="λ", x_units="pixel")
+        self.setup_standard_axes(left_width=30, top_height=15)
+
+        self._recompute_and_plot()
+
+        initial_idx = self.n_spectral // 2 if self.n_spectral > 0 else 0
+        self.vLine.setPos(float(initial_idx))
+        self._emit_index(initial_idx)
+
+    def _recompute_and_plot(self):
+        avg = np.nanmean(self.full_data, axis=(0, 2))
+        self.plot_curve.setData(self.spectral, avg)
+
+    def _emit_index(self, idx: int):
+        self.spectralIndexChanged.emit(int(idx))
+
+    def _on_vline_moved(self):
+        idx = int(np.clip(np.round(self.vLine.value()), 0, self.n_spectral - 1))
+        self._emit_index(idx)
+
+    def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
+        set_plot_wavelength_range(self.plotItem, self.spectral, min_val, max_val, axis='x')
+
+    def reset_spectral_range(self):
+        reset_plot_wavelength_range(self.plotItem, self.spectral, axis='x')
 
 class StokesImageWindow(BasePlotWidget):
     """Displays a scan image (spatial_y vs spatial_x) for a selected wavelength.
@@ -935,6 +1345,20 @@ class StokesImageWindow(BasePlotWidget):
         self.image_item.setImage(self._slice_image())
         # Refresh label at current crosshair
         self._update_label(self.vLine.value(), self.hLine.value())
+
+    @QtCore.pyqtSlot(float, float)
+    def set_crosshair_position(self, xpos: float, ypos: float):
+        if self.crosshair_locked:
+            return
+        self.vLine.blockSignals(True)
+        self.hLine.blockSignals(True)
+        try:
+            self.vLine.setPos(xpos)
+            self.hLine.setPos(ypos)
+            self._update_label(xpos, ypos)
+        finally:
+            self.vLine.blockSignals(False)
+            self.hLine.blockSignals(False)
 
     def update_spatial_x_range(self, min_val: float, max_val: float):
         set_plot_wavelength_range(self.plotItem, self.x_pixels, min_val, max_val, axis='x')
