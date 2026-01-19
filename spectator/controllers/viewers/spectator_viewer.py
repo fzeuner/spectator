@@ -18,7 +18,7 @@ from ...views.windows import (
 )
 
 
-def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str] = None):
+def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str] = None, scale_info: Dict[str, Any] = None):
     """
     Main function to create and display the interactive data viewer.
 
@@ -26,6 +26,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         data: Numpy array of shape (N_Stokes, N_wl, N_x) containing Stokes data.
         title: Window title.
         state_names: List of names for the states (e.g., ['I', 'Q', 'U', 'V'])
+        scale_info: Dictionary with scaling information for display
     """  
     # Use existing QApplication if present, otherwise create one
     app = QtWidgets.QApplication.instance()
@@ -64,7 +65,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
         # Create Widgets for this Stokes parameter (all consume (wl, x))
         win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
-        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info)
         win_spatial = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
 
         # Append to lists

@@ -20,6 +20,17 @@ DOT_LINE = QtCore.Qt.PenStyle.DotLine
 
 ALIGN_CENTER = QtCore.Qt.AlignmentFlag.AlignCenter
 
+# Unicode superscript characters for exponent display
+_SUPERSCRIPT_MAP = {
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+    '-': '⁻', '+': '⁺'
+}
+
+def _to_superscript(num: int) -> str:
+    """Convert an integer to Unicode superscript characters."""
+    return ''.join(_SUPERSCRIPT_MAP.get(c, c) for c in str(num))
+
 
 def add_line(plot_item: pg.PlotItem, 
              color: str, 
@@ -179,11 +190,11 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
                         if factor == 1.0:
                             label_text = "1"
                         else:
-                            # Convert 1/factor to scientific notation label
+                            # Convert 1/factor to scientific notation label with superscript
                             inverse_factor = 1.0 / factor
                             exponent = int(np.log10(abs(inverse_factor))) if inverse_factor != 0 else 0
                             if exponent != 0:
-                                label_text = f"10^{exponent}"
+                                label_text = f"10{_to_superscript(exponent)}"
                             else:
                                 label_text = "1"
                     # If no scaling info for this state, label_text remains "1"
@@ -195,11 +206,11 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
                         if first_factor == 1.0:
                             label_text = "1"
                         else:
-                            # Convert 1/factor to scientific notation label
+                            # Convert 1/factor to scientific notation label with superscript
                             inverse_factor = 1.0 / first_factor
                             exponent = int(np.log10(abs(inverse_factor))) if inverse_factor != 0 else 0
                             if exponent != 0:
-                                label_text = f"10^{exponent}"
+                                label_text = f"10{_to_superscript(exponent)}"
                             else:
                                 label_text = "1"
  

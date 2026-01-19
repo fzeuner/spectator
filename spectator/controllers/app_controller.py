@@ -567,7 +567,8 @@ class Manager:
                 
                 # Get state names from metadata
                 state_names = metadata.get('states_info', {}).get('names', None)
-                return spectator(data, title=metadata['title'], state_names=state_names)
+                scale_info = metadata.get('scale_info', None)
+                return spectator(data, title=metadata['title'], state_names=state_names, scale_info=scale_info)
             else:
                 raise NotImplementedError(f"3D viewer for axis configuration {metadata['axes']} not yet implemented")
         elif viewer_type == "scan_viewer":
@@ -579,7 +580,8 @@ class Manager:
                 metadata.get('spectral_axis') == 2 and 
                 3 in metadata.get('spatial_axes', [])):
                 state_names = metadata.get('states_info', {}).get('names', None)
-                return scan_viewer(data, title=metadata['title'], state_names=state_names)
+                scale_info = metadata.get('scale_info', None)
+                return scan_viewer(data, title=metadata['title'], state_names=state_names, scale_info=scale_info)
             else:
                 raise NotImplementedError(f"4D scan viewer requires axes [states, spatial, spectral, spatial]; got {metadata['axes']}")
 

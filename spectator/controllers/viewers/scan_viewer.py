@@ -20,9 +20,15 @@ from ...views.windows import (
 )
 
 
-def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[str] = None):
+def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[str] = None, scale_info: Dict[str, Any] = None):
     """
     Expected overall data shape: (states, spatial_y, spectral, spatial_x)
+    
+    Args:
+        data: Numpy array of shape (states, spatial_y, spectral, spatial_x)
+        title: Window title
+        state_names: List of names for the states
+        scale_info: Dictionary with scaling information for display
     """
     # Use existing QApplication if present, otherwise create one
     app = QtWidgets.QApplication.instance()
@@ -76,13 +82,13 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         initial_spec_y = state_data[:, :, 0].T if state_data.shape[2] > 0 else np.zeros((stokes_data_wl_x.shape[0], state_data.shape[0]))
 
         # Windows
-        win_image_spectrum_x = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_image_spectrum_x = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info)
         
-        win_image_spectrum_y = StokesSpectrumYImageWindow(initial_spec_y, stokes_index=i, name=base_name)
+        win_image_spectrum_y = StokesSpectrumYImageWindow(initial_spec_y, stokes_index=i, name=base_name, scale_info=scale_info)
         win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
         win_spatial_x = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
         win_spatial_y = StokesSpatialYWindow(state_data, stokes_index=i, name=base_name)
-        win_scan = StokesImageWindow(state_data, stokes_index=i, name=base_name)
+        win_scan = StokesImageWindow(state_data, stokes_index=i, name=base_name, scale_info=scale_info)
 
         image_spectra_x.append(win_image_spectrum_x)
         image_spectra_y.append(win_image_spectrum_y)
