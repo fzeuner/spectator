@@ -25,7 +25,7 @@ conda install -c conda-forge numpy pyqtgraph qdarkstyle scipy
 pip install PyQt6
 
 # Clone and install
-git clone ssh://github.com/fzeuner/spectator.git
+git clone git@github.com:fzeuner/spectator.git
 cd spectator
 pip install -e .
 ```
