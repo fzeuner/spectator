@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectator"
-version = "0.1.0"
-description = "Spectator visualization components for THEMIS data"
+version = "0.2.0"
+description = "Visualization for spectropolarimetric data"
 readme = "README.md"
-requires-python = ">=3.12"
-authors = [{ name = "Windsurf THEMIS", email = "noreply@example.com" }]
+requires-python = ">=3.14"
+authors = [{ name = "Franziska Zeuner" }]
 
 [tool.setuptools]
 package-dir = {"" = "."}
