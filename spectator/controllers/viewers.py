@@ -4,20 +4,16 @@ from pyqtgraph.Qt import QtWidgets
 import qdarkstyle
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
-from utils.constants import CONTROL_PANEL_SIZE, get_initial_window_size
-from utils.fixed_dock_label import FixedDockLabel
+from ..utils.constants import CONTROL_PANEL_SIZE, get_initial_window_size
+from ..utils.fixed_dock_label import FixedDockLabel
 from typing import List, Dict, Any 
  
-
 # local imports
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Note: Models import removed; unused in this controller
-from views import (
+from ..views import (
     PlotControlWidget
 )
-from views.windows import (
+from ..views.windows import (
     StokesSpectrumWindow, StokesSpectrumImageWindow, StokesSpatialWindow, StokesImageWindow,
     AverageSpectrumWindow, StokesSpatialYWindow, StokesSpectrumYImageWindow
 )

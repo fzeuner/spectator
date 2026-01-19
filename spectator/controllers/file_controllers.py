@@ -7,18 +7,14 @@ This module handles the connection between file selection and data loading/displ
 import numpy as np
 from typing import List, Dict, Any
 from pyqtgraph.Qt import QtCore, QtWidgets
-
-# Import local modules
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.file_model import datReader
-from controllers.app_controller import data_manager
-from controllers.app_controller import display_data
-from config.viewer_config import DEFAULT_AXIS_ORDERS
+from ..models.file_model import datReader
+from .app_controller import data_manager
+from .app_controller import display_data
+from ..config.viewer_config import DEFAULT_AXIS_ORDERS
 
-from utils.config import load_config, ensure_example_config
+from ..utils.config import load_config, ensure_example_config
 
 
 class FileLoadingController(QtCore.QObject):
@@ -91,14 +87,14 @@ class FileLoadingController(QtCore.QObject):
             
             # Import here to avoid circular imports
             from .app_controller import data_manager
-            from models.axis_types import AxisType
+            from ..models.axis_types import AxisType
             
             # Use data manager's rearrange functionality directly
             # The data comes as (states, spatial, spectral) 
             # The StokesSpectrumImageWindow expects (spectral, spatial) per state and transposes internally
             # So we need (states, spectral, spatial) format
-            input_axes = [AxisType.STATES, AxisType.SPATIAL, AxisType.SPECTRAL]
-            target_axes = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL]
+            input_axes = [AxisType.STATES, AxisType.SPATIAL_X, AxisType.SPECTRAL]
+            target_axes = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL_X]
             
             processed_data = data_manager.rearranger.rearrange_data(
                 raw_data_array,

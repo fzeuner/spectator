@@ -33,7 +33,7 @@ from .colors import getWidgetColors
 __all__ = [
     # Constants
     'MIN_LINE_DISTANCE',
-    'DEFAULT_N_STOKES', 'DEFAULT_N_WL', 'DEFAULT_N_X', 'DEFAULT_WAVELENGTH_RANGE',
+    'DEFAULT_N_STOKES', 'DEFAULT_N_WL', 'DEFAULT_N_X',
     'DEFAULT_LINE_WIDTH', 'ColorSchemes', 'GrayPalette', 'BluePalette',
     'MAX_STATES', 'MAX_SPATIAL_AXES',
     
@@ -45,9 +45,9 @@ __all__ = [
     'create_y_limit_controls', 'apply_dark_theme', 'apply_light_theme',
     
     # Data utilities
-    'generate_example_data_3d', 'generate_example_data_4d'
+    'generate_example_data_3d', 'generate_example_data_4d',
     
     # Color utilities
-    'getWidgetColors', 'get_crosshair_colors',
+    'getWidgetColors',
     
 ]

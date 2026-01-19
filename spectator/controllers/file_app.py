@@ -9,10 +9,10 @@ from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import qdarkstyle
 from pyqtgraph.dockarea import DockArea, Dock
 from .file_controllers import FileListingController, FileLoadingController
-from utils.info_formatter import format_info_to_html
-from utils.colors import getWidgetColors
-from utils.fixed_dock_label import FixedDockLabel
-from config.viewer_config import DEFAULT_AXIS_ORDERS
+from ..utils.info_formatter import format_info_to_html
+from ..utils.colors import getWidgetColors
+from ..utils.fixed_dock_label import FixedDockLabel
+from ..config.viewer_config import DEFAULT_AXIS_ORDERS
 
 
 class FileBrowserApp(QtWidgets.QMainWindow):

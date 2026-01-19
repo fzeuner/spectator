@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-import os, sys
-# Ensure project root is on sys.path when running this script directly
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import numpy as np
-from controllers.app_controller import display_data
+from spectator.controllers.app_controller import display_data
 
 
 def main():

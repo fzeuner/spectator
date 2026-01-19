@@ -11,16 +11,14 @@ data structure and user specifications.
 
 """
 
+import os
 import numpy as np
 from typing import List, Tuple, Dict, Optional, Union, Any, Sequence
 import warnings
 from collections import Counter
 # local imports
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.viewer_config import VIEWER_SELECTION_RULES
-from models.axis_types import AxisType
+from ..config.viewer_config import VIEWER_SELECTION_RULES, DEFAULT_AXIS_ORDERS
+from ..models.axis_types import AxisType
 
 class DataDimensionality:
     """Class to handle data dimensionality analysis and validation."""
@@ -559,7 +557,7 @@ class Manager:
         """Create the appropriate viewer instance."""
         if viewer_type == "spectator":
             # Use existing 3D spectral viewer
-            from controllers.viewers import spectator
+            from .viewers import spectator
             
             # Validate that this is the expected format for the current viewer
             if (len(data.shape) == 3 and 
@@ -573,7 +571,7 @@ class Manager:
             else:
                 raise NotImplementedError(f"3D viewer for axis configuration {metadata['axes']} not yet implemented")
         elif viewer_type == "scan_viewer":
-            from controllers.viewers import scan_viewer
+            from .viewers import scan_viewer
             # Expect axes order: states (0), spatial (1), spectral (2), spatial (3)
             if (len(data.shape) == 4 and 
                 metadata.get('states_axis') == 0 and 
@@ -600,7 +598,6 @@ class Manager:
                 'message': f"Viewer for {len(data.shape)}D data with axes {metadata['axes']} is ready for implementation"
             }
 
-from config.viewer_config import DEFAULT_AXIS_ORDERS
 
 # Global instance for easy access
 data_manager = Manager()
@@ -672,12 +669,12 @@ def display_data(data: np.ndarray,
 
 if __name__ == "__main__":
     # Test the data manager with example data
-    from utils.data_utils import generate_example_data
+    from ..utils.data_utils import generate_example_data_3d
     
     print("Testing Data Manager...")
     
     # Generate test data
-    test_data = generate_example_data()  # Shape: (N_STOKES, N_SPECTRAL, N_X)
+    test_data = generate_example_data_3d()  # Shape: (N_STOKES, N_SPECTRAL, N_X)
     print(f"Test data shape: {test_data.shape}")
     
     # Test 1: Current format (should work with existing viewer)

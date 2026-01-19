@@ -14,9 +14,9 @@ from functools import partial
 
 from .line_controls import LinesControlGroup
 from .spectrum_limits import SpectrumLimitControlGroup
-from utils.plotting import create_wavelength_limit_controls
-from utils.synchronization import SynchronizationManager
-from utils.fixed_dock_label import FixedDockLabel
+from ..utils.plotting import create_wavelength_limit_controls
+from ..utils.synchronization import SynchronizationManager
+from ..utils.fixed_dock_label import FixedDockLabel
 
 
 class PlotControlWidget(QtWidgets.QWidget):

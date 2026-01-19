@@ -6,17 +6,17 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import List, Tuple, Dict, Optional, Any
 
 from .base_widgets import BasePlotWidget
-from utils.constants import (
+from ..utils.constants import (
     MIN_LINE_DISTANCE, ColorSchemes
 )
-from utils.colors import getWidgetColors
-from utils.averaging_lines import AveragingLineManager
-from utils import (
+from ..utils.colors import getWidgetColors
+from ..utils.averaging_lines import AveragingLineManager
+from ..utils import (
     add_line, add_crosshair, create_histogram, 
     initialize_spectrum_plot_item, initialize_image_plot_item,
     set_plot_wavelength_range, reset_plot_wavelength_range, update_crosshair_from_mouse
 )
-from utils.plotting import SOLID_LINE
+from ..utils.plotting import SOLID_LINE
 
 class StokesSpatialWindow(BasePlotWidget):
     

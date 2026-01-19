@@ -8,9 +8,9 @@ averaging lines, eliminating code duplication and providing a consistent interfa
 import numpy as np
 import pyqtgraph as pg
 from typing import Optional, Tuple, Callable
-from utils.colors import getWidgetColors
+from .colors import getWidgetColors
 from pyqtgraph.Qt import QtCore
-from utils.plotting import add_line, SOLID_LINE, DOT_LINE, DASH_LINE
+from .plotting import add_line, SOLID_LINE, DOT_LINE, DASH_LINE
 
 MIN_LINE_DISTANCE = 3
 
