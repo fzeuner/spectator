@@ -1,0 +1,637 @@
+"""
+File loading controller for integrating Files widget with data manager.
+
+This module handles the connection between file selection and data loading/display.
+"""
+
+import numpy as np
+from typing import List, Dict, Any
+from pyqtgraph.Qt import QtCore, QtWidgets
+
+# Import local modules
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from models.file_model import datReader
+from controllers.app_controller import data_manager
+from controllers.app_controller import display_data
+from config.viewer_config import DEFAULT_AXIS_ORDERS
+
+from utils.config import load_config, ensure_example_config
+
+
+class FileLoadingController(QtCore.QObject):
+    """
+    Controller for handling file loading and data display integration.
+    
+    This class connects the Files widget to the data loading system and
+    manages the flow from file selection to data display.
+    """
+    
+    # Signals
+    dataLoaded = QtCore.pyqtSignal(np.ndarray, list)  # data, state_names
+    loadingError = QtCore.pyqtSignal(str)  # error_message
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.current_data = None
+        self.current_file_path = None
+        # Keep strong references to created viewer windows so they don't get GC'd
+        self._open_viewers = []
+        # Load user configuration (non-fatal if missing)
+        ensure_example_config()
+        self._config = load_config()
+        # Store resolved base parent directory from config for comparisons
+        try:
+            base_dir_cfg = self._config.get('default_data_base_dir', '')
+            self._base_parent_dir = os.path.abspath(os.path.expanduser(base_dir_cfg)) if base_dir_cfg else ''
+        except Exception:
+            self._base_parent_dir = ''
+        
+    def load_file(self, file_path: str):
+        """
+        Load a .dat file and emit the processed data.
+        
+        Args:
+            file_path: Path to the .dat file to load
+        """
+        try:
+            
+            # Use datReader to load the file
+            reader = datReader(path=file_path, python_dict=True, verbose=False)
+            
+            # Get the images array
+            images_array = reader.getDatImagesArray()
+            
+            # Stack all images along the first axis (states axis)
+            if not images_array:
+                raise ValueError("Empty images array")
+            
+            raw_data_array = np.stack(images_array, axis=0)
+            # Raw data is (states, spatial, spectral)
+            
+            # Extract state names via reader API (already excludes 'info')
+            state_names = None
+            try:
+                state_names = reader.getStateNames()
+            except Exception:
+                state_names = None
+            # Store file info for later display
+            try:
+                self.current_info = reader.getDatInfo()
+            except Exception:
+                self.current_info = None
+            
+            # As a safety net, ensure 'info' never appears and deduplicate
+            if state_names:
+                state_names = [s for s in state_names if isinstance(s, str) and s.strip().lower() != 'info']
+                # Normalize whitespace
+                state_names = [s.strip() for s in state_names]
+            
+            # Import here to avoid circular imports
+            from .app_controller import data_manager
+            from models.axis_types import AxisType
+            
+            # Use data manager's rearrange functionality directly
+            # The data comes as (states, spatial, spectral) 
+            # The StokesSpectrumImageWindow expects (spectral, spatial) per state and transposes internally
+            # So we need (states, spectral, spatial) format
+            input_axes = [AxisType.STATES, AxisType.SPATIAL, AxisType.SPECTRAL]
+            target_axes = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL]
+            
+            processed_data = data_manager.rearranger.rearrange_data(
+                raw_data_array,
+                input_axes=input_axes,
+                target_axes=target_axes
+            )
+            
+            # Data successfully loaded and processed
+            
+            # Store current data
+            self.current_data = processed_data
+            self.current_file_path = file_path
+            self._current_filename = os.path.basename(file_path)
+            
+            # Emit signal with loaded data
+            self.dataLoaded.emit(processed_data, state_names)
+                
+        except Exception as e:
+            error_msg = f"Error loading file {file_path}: {str(e)}"
+            self.loadingError.emit(error_msg)
+    
+    
+    def display_data(self, data: np.ndarray, state_names: List[str]):
+        """
+        Display the loaded data using the data manager.
+        
+        Args:
+            data: Processed data array
+            state_names: List of state names
+        """
+        try:
+            # Check if we should close current viewers (when "Always new" is deactivated)
+            if hasattr(self, 'parent') and hasattr(self.parent(), 'file_lister'):
+                file_lister = self.parent().file_lister
+                if hasattr(file_lister, 'always_new_button') and not file_lister.always_new_button.isChecked():
+                    data_manager.close_current_viewers()
+            
+            # Get the filename for the title
+            filename = getattr(self, '_current_filename', 'Unknown')
+            
+            # Determine axis order based on data shape using central config
+            ndim = len(data.shape)
+            try:
+                axis_order = list(DEFAULT_AXIS_ORDERS[ndim])
+            except KeyError:
+                raise ValueError(f"Unsupported data shape for viewer auto-selection: {data.shape}")
+
+            # For 2D data there is no states axis -> ignore provided state_names
+            if ndim == 2:
+                state_names = None
+
+            # Create title with filename
+            title = f"Spectator - {filename}"
+
+            # Use the public helper to display the data with explicit axis order
+            viewer = display_data(
+                data,
+                order=axis_order,
+                title=title,
+                state_names=state_names,
+            )
+            
+            return viewer
+            
+        except Exception as e:
+            error_msg = f"Error displaying data: {str(e)}"
+            self.loadingError.emit(error_msg)
+        
+        return None
+
+    def get_current_info(self):
+        """Return info section from last loaded file, if available."""
+        return self.current_info
+
+
+class FileListingController(QtWidgets.QWidget):
+    """Widget for browsing and selecting .dat files from directories."""
+    
+    # Signal emitted when a file is selected for loading
+    fileSelected = QtCore.pyqtSignal(str)  # file_path
+    # Signal emitted when user requests an Info dock
+    infoRequested = QtCore.pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        
+        # Initialize instance variables
+        self.directory = ['']
+        self.selected_directories = ['']
+        self.file_paths = []  # Store full file paths
+        self._dir_paths = []  # When listing directories, store abs paths
+        self._listing_mode = 'files'  # 'files' or 'dirs'
+        # Load config and precompute start directory
+        ensure_example_config()
+        self._config = load_config()
+        # Load from config (with defaults applied by loader)
+        self.must_be_in_directory = self._config.get("must_be_in_directory", "reduced")
+        self.excluded_file_types = list(self._config.get("excluded_file_terms", ["cal", "dark", "ff"]))
+        self._start_directory = self._compute_start_directory()
+        
+        # Setup UI
+        self._setup_ui()
+        self._connect_signals()
+        # Auto-populate listing if a valid start directory is configured
+        try:
+            if self._start_directory and os.path.isdir(self._start_directory):
+                if self._config.get('auto_navigate_recent', False):
+                    # Auto-list files directly
+                    self._populate_from_paths([self._start_directory])
+                    self.directory = [self._start_directory]
+                else:
+                    # List subdirectories for user to choose
+                    self._populate_directories(self._start_directory)
+                    self.directory = [self._start_directory]
+        except Exception:
+            pass
+
+    @QtCore.pyqtSlot()
+    def _on_directory_entered(self):
+        """Handle manual edits of the current directory path."""
+        path = self.directorylabel.text().strip()
+        if not path:
+            return
+        import os
+        if os.path.isdir(path):
+            try:
+                self._populate_from_paths([path])
+                self.directory = [path]
+            except Exception:
+                pass
+    
+    def _setup_ui(self):
+        """Setup the user interface."""
+        # Create widgets
+        # Display toggle controls whether selecting a file also opens the main viewer
+        self.display_button = QtWidgets.QPushButton('Display')
+        self.display_button.setCheckable(True)
+        self.display_button.setChecked(True)  # Activated by default
+        self.display_button.setToolTip('If enabled, selecting a file will open the viewer. If disabled, only load and show info.')
+        # Style to indicate activation like other control buttons
+        self.display_button.toggled.connect(self._on_display_toggled)
+        # Initialize style based on default checked state
+        self.display_button.setStyleSheet("background-color: red;" if self.display_button.isChecked() else "")
+        
+        # Always new toggle controls whether to close current viewer when loading new data
+        self.always_new_button = QtWidgets.QPushButton('Always new')
+        self.always_new_button.setCheckable(True)
+        self.always_new_button.setChecked(True)  # Activated by default
+        self.always_new_button.setToolTip('If enabled, opens new viewer for each file. If disabled, closes current viewer when loading new data.')
+        self.always_new_button.toggled.connect(self._on_always_new_toggled)
+        # Initialize style based on default checked state
+        self.always_new_button.setStyleSheet("background-color: red;" if self.always_new_button.isChecked() else "")
+        self.button = QtWidgets.QPushButton('Choose Directory')
+        self.button.clicked.connect(self.handleChooseDirectories)
+        self.refresh_button = QtWidgets.QPushButton('Refresh')
+        self.refresh_button.clicked.connect(self.refresh_listing)
+        self.listWidget = QtWidgets.QListWidget()
+        self.directorylabel = QtWidgets.QLineEdit()
+        self.fileinfolabel1 = QtWidgets.QLabel()
+        self.fileinfolabel2 = QtWidgets.QLabel()
+        
+        # Set initial text and make directory editable
+        initial_dir = self._start_directory or self.directory[0]
+        self.directorylabel.setText(initial_dir)
+        self.directorylabel.returnPressed.connect(self._on_directory_entered)
+        self.fileinfolabel1.setText('Files sub-directory: ' + self.must_be_in_directory)
+        
+        file_type_string = " ".join(self.excluded_file_types)
+        self.fileinfolabel2.setText('Excluded files: ' + file_type_string)
+        
+        # Create layout
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self.listWidget)
+        # Place toggle buttons above the other buttons
+        toggles_row = QtWidgets.QHBoxLayout()
+        self.display_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.always_new_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        toggles_row.addWidget(self.display_button, 1)
+        toggles_row.addWidget(self.always_new_button, 1)
+        layout.addLayout(toggles_row)
+        # Buttons row (Choose + Refresh) – make them share full width equally
+        buttons_row = QtWidgets.QHBoxLayout()
+        # Make buttons expand equally to fill the row
+        self.button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.refresh_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        buttons_row.addWidget(self.button, 1)
+        buttons_row.addWidget(self.refresh_button, 1)
+        layout.addLayout(buttons_row)
+        layout.addWidget(self.directorylabel)
+        layout.addWidget(self.fileinfolabel1)
+        layout.addWidget(self.fileinfolabel2)
+    
+    def _connect_signals(self):
+        """Connect widget signals to handlers."""
+        self.listWidget.itemClicked.connect(self.on_file_clicked)
+        # Keep display button style in sync if programmatically changed
+        try:
+            self.display_button.toggled.connect(self._on_display_toggled)
+            self.always_new_button.toggled.connect(self._on_always_new_toggled)
+        except Exception:
+            pass
+
+    @QtCore.pyqtSlot(bool)
+    def _on_display_toggled(self, checked: bool):
+        """Visualize activation state by coloring red when active."""
+        self.display_button.setStyleSheet("background-color: red;" if checked else "")
+    
+    @QtCore.pyqtSlot(bool)
+    def _on_always_new_toggled(self, checked: bool):
+        """Visualize activation state by coloring red when active."""
+        self.always_new_button.setStyleSheet("background-color: red;" if checked else "")
+    
+    def on_file_clicked(self, item):
+        """Handle file selection from the list."""
+        try:
+            # Extract the item number from the display text (e.g., "1. filename.dat")
+            item_text = item.text()
+            
+            # Skip if this is an info message (no files found)
+            if not item_text or item_text.startswith("No .dat files") or item_text.startswith("Requirements") or item_text.startswith("•"):
+                return
+            
+            item_number = int(item_text.split('.')[0]) - 1
+            
+            if self._listing_mode == 'files':
+                if 0 <= item_number < len(self.file_paths):
+                    file_path = self.file_paths[item_number]
+                    # Emit signal with the selected file path
+                    self.fileSelected.emit(file_path)
+            elif self._listing_mode == 'dirs':
+                if 0 <= item_number < len(self._dir_paths):
+                    chosen_dir = self._dir_paths[item_number]
+                    # Populate files from this directory
+                    self._populate_from_paths([chosen_dir])
+                    self._listing_mode = 'files'
+                    self.directory = [chosen_dir]
+        
+        except (ValueError, IndexError) as e:
+            pass
+
+    def handleChooseDirectories(self):
+        """Handle directory selection and populate file list."""
+        dialog = QtWidgets.QFileDialog(self)
+        dialog.setWindowTitle('Choose a directory')
+        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.Directory)
+        dialog.setOption(QtWidgets.QFileDialog.Option.ShowDirsOnly, True)
+        # Set starting directory, preferring the current directory over config
+        import os
+        start_dir = ''
+        try:
+            if self.directory and os.path.isdir(self.directory[0]):
+                start_dir = self.directory[0]
+            elif self._start_directory and os.path.isdir(self._start_directory):
+                start_dir = self._start_directory
+            else:
+                start_dir = os.getcwd()
+        except Exception:
+            try:
+                start_dir = self._start_directory if (self._start_directory and os.path.isdir(self._start_directory)) else os.getcwd()
+            except Exception:
+                start_dir = ''
+
+        if start_dir:
+            try:
+                dialog.setDirectory(start_dir)
+            except Exception:
+                pass
+        
+        for view in dialog.findChildren(QtWidgets.QTreeView):
+            try:
+                view.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            except Exception:
+                pass
+        
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            selected = dialog.selectedFiles()
+            # If user chose the base (parent) directory, do NOT list files; show its subdirectories
+            base = selected[0] if selected else self.directory[0]
+            if self._start_directory and os.path.abspath(base) == os.path.abspath(self._start_directory):
+                self._populate_directories(base)
+            else:
+                # Otherwise, attempt to list files under the chosen directory; if none, show its subdirectories
+                self._populate_from_paths(selected)
+            self.directory = selected
+        
+        dialog.deleteLater()
+
+    def _populate_from_paths(self, selected_paths: list[str]):
+        """Populate the list widget and labels from selected directories (no dialog)."""
+        try:
+            self.listWidget.clear()
+            self.file_paths.clear()
+            self._listing_mode = 'files'
+
+            # Never list files directly for the configured base (parent) directory; show its subdirectories instead
+            try:
+                if selected_paths and self._base_parent_dir and os.path.abspath(selected_paths[0]) == os.path.abspath(self._base_parent_dir):
+                    self._populate_directories(selected_paths[0])
+                    return
+            except Exception:
+                pass
+
+            list_files, list_dirs = self.all_dat_files(
+                selected_paths,
+                excludes=self.excluded_file_types,
+                in_dir=self.must_be_in_directory
+            )
+
+            if list_files:
+                show_file_list = []
+                for n, (file, directory) in enumerate(zip(list_files, list_dirs)):
+                    full_path = os.path.join(directory, file)
+                    self.file_paths.append(full_path)
+                    show_file_list.append(str(n+1) + '. ' + file)
+                self.listWidget.addItems(show_file_list)
+
+                chosen_dir = selected_paths[0] if selected_paths else self.directory[0]
+                self.directory = [chosen_dir]
+                self.directorylabel.setText(chosen_dir)
+            else:
+                # No files found: show directories for user to drill down
+                base = selected_paths[0] if selected_paths else self.directory[0]
+                self.directory = [base]
+                self._populate_directories(base)
+                return
+
+            # Track the directories used for listing
+            self.selected_directories = list_dirs
+        except Exception:
+            pass
+
+    def refresh_listing(self):
+        """Refresh current listing according to current mode and directory."""
+        try:
+            current_base = self.directory[0] if self.directory else (self._start_directory or '')
+            # Always re-attempt a file listing for the current base.
+            # _populate_from_paths already contains logic to fall back to
+            # directory listing and to treat the configured base parent
+            # directory specially.
+            self._populate_from_paths([current_base])
+        except Exception:
+            pass
+
+    
+
+    def _populate_directories(self, base_dir: str):
+        """Populate the list with immediate subdirectories of base_dir (no filtering)."""
+        try:
+            self.listWidget.clear()
+            self.file_paths.clear()
+            self._dir_paths.clear()
+            self._listing_mode = 'dirs'
+
+            if not base_dir or not os.path.isdir(base_dir):
+                self.listWidget.addItem("Base directory does not exist.")
+                # Disable selection for info items
+                for i in range(self.listWidget.count()):
+                    item = self.listWidget.item(i)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
+                return
+
+            # List immediate subdirectories
+            entries = []
+            try:
+                for entry in sorted(os.listdir(base_dir)):
+                    full = os.path.join(base_dir, entry)
+                    if os.path.isdir(full):
+                        entries.append((entry, full))
+            except Exception:
+                entries = []
+
+            if entries:
+                # If there's exactly one subdirectory and it matches the required
+                # must_be_in_directory (e.g. 'reduced'), automatically descend
+                # into it instead of listing only that subdirectory.
+                try:
+                    must_dir = self.must_be_in_directory
+                except Exception:
+                    must_dir = None
+
+                if must_dir and len(entries) == 1 and entries[0][0] == must_dir:
+                    self._populate_from_paths([entries[0][1]])
+                    return
+
+                show_dirs = []
+                for n, (name, full) in enumerate(entries):
+                    self._dir_paths.append(full)
+                    show_dirs.append(f"{n+1}. {name}")
+                self.listWidget.addItems(show_dirs)
+                self.directorylabel.setText(base_dir)
+            else:
+                self.listWidget.addItem("No subdirectories found.")
+                for i in range(self.listWidget.count()):
+                    item = self.listWidget.item(i)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
+                self.directorylabel.setText(base_dir)
+        except Exception:
+            # Non-fatal UI population errors should not crash the app
+            pass
+
+    def _compute_start_directory(self) -> str:
+        """Compute the initial directory for the file chooser based on config.
+
+        If auto_navigate_recent is True, return the most recent YYMMDD subdirectory
+        within default_data_base_dir. Supports an optional 4-digit year layer:
+        base_dir/YYYY/YYMMDD. Otherwise return default_data_base_dir.
+        """
+        import re
+        base_dir = self._config.get('default_data_base_dir')
+        if not base_dir:
+            return ''
+        base_dir = os.path.abspath(os.path.expanduser(base_dir))
+        if not os.path.isdir(base_dir):
+            return base_dir
+
+        if not self._config.get('auto_navigate_recent', False):
+            return base_dir
+
+        # Find subdirectories containing a YYMMDD token (may have prefixes/suffixes)
+        # at base level OR within optional 4-digit year folders (e.g., 2025/250822).
+        # Pick the latest valid date.
+        yymmdd_re = re.compile(r'(\d{6})')
+        year_re = re.compile(r'^(19|20)\d{2}$')
+
+        def extract_token(name: str) -> str | None:
+            m = yymmdd_re.search(name)
+            return m.group(1) if m else None
+
+        def parse_yymmdd(token: str, fallback_year: int | None = None):
+            yy = int(token[0:2])
+            mm = int(token[2:4])
+            dd = int(token[4:6])
+            # Basic sanity checks on month/day
+            if not (1 <= mm <= 12 and 1 <= dd <= 31):
+                return None
+            year = (2000 + yy) if fallback_year is None else fallback_year
+            return year, mm, dd
+
+        best_tuple = None  # (year, mm, dd, path)
+
+        try:
+            for entry in os.listdir(base_dir):
+                full = os.path.join(base_dir, entry)
+                if not os.path.isdir(full):
+                    continue
+
+                # Case 1: base_dir/... with a YYMMDD token in the name
+                token = extract_token(entry)
+                if token:
+                    parsed = parse_yymmdd(token)
+                    if parsed is not None:
+                        y, m, d = parsed
+                        tup = (y, m, d, full)
+                        if best_tuple is None or tup[:3] > best_tuple[:3]:
+                            best_tuple = tup
+                        # Do not continue here; a dir can also be a YYYY year dir
+
+                # Case 2: base_dir/YYYY/YYMMDD
+                if year_re.match(entry):
+                    year_val = int(entry)
+                    try:
+                        for sub in os.listdir(full):
+                            sub_full = os.path.join(full, sub)
+                            if os.path.isdir(sub_full):
+                                sub_token = extract_token(sub)
+                                if sub_token:
+                                    parsed = parse_yymmdd(sub_token, fallback_year=year_val)
+                                    if parsed is not None:
+                                        y, m, d = parsed
+                                        tup = (y, m, d, sub_full)
+                                        if best_tuple is None or tup[:3] > best_tuple[:3]:
+                                            best_tuple = tup
+                    except Exception:
+                        # ignore unreadable year dir
+                        pass
+        except Exception:
+            # If listing base_dir fails, fall back
+            return base_dir
+
+        if best_tuple is None:
+            return base_dir
+
+        chosen = best_tuple[3]
+        # If a specific subdirectory is required (e.g., 'reduced'), and it exists
+        # inside the chosen date directory, auto-descend into it.
+        try:
+            must_dir = self._config.get('must_be_in_directory')
+        except Exception:
+            must_dir = None
+        if must_dir:
+            candidate = os.path.join(chosen, must_dir)
+            if os.path.isdir(candidate):
+                return candidate
+        return chosen
+
+        
+    def all_dat_files(self, directories, excludes=None, in_dir=None):
+        """Find all .dat files in the specified directories."""
+        if excludes is None:
+            excludes = []
+        if in_dir is None:
+            in_dir = self.must_be_in_directory
+            
+        # Quiet operation: no debug printing
+        
+        list_of_files = []
+        list_of_directories = []
+        total_sav_files = 0
+        
+        for root, dirs, files in os.walk(directories[0]):       
+            dat_files_in_dir = [f for f in files if f.endswith('.dat')]
+            if dat_files_in_dir:
+                total_sav_files += len(dat_files_in_dir)
+                
+                for file in dat_files_in_dir:
+                    # Check directory requirement
+                    if in_dir in root:
+                        
+                        # Check exclusions
+                        use = True
+                        for exclude in excludes:
+                            if exclude in file:
+                                use = False
+                                break
+                        
+                        if use:
+                            list_of_files.append(file)
+                            list_of_directories.append(root)
+                        else:
+                            pass
+                    else:
+                        pass
+        # No summary prints
+                
+        return list_of_files, list_of_directories     

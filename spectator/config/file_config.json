@@ -1,0 +1,10 @@
+{
+  "default_data_base_dir": "/home/zeuner/data/pdata",
+  "auto_navigate_recent": false,
+  "must_be_in_directory": "reduced",
+  "excluded_file_terms": [
+    "cal",
+    "dark",
+    "ff"
+  ]
+}
