@@ -20,12 +20,11 @@ A Python-based visualization tool for multi-dimensional spectropolarimetric data
 conda create -n spectator python=3.14
 conda activate spectator
 
-# Install dependencies
-conda install -c conda-forge numpy pyqtgraph qdarkstyle scipy
-pip install PyQt6
+# Install dependencies (pyqt has to be version 6 - do not mix with pyqt5!)
+conda install -c conda-forge numpy pyqtgraph qdarkstyle scipy pyqt
 
 # Clone and install
-git clone git@github.com:fzeuner/spectator.git
+git clone https://github.com/fzeuner/spectator.git
 cd spectator
 pip install -e .
 ```
