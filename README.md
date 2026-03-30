@@ -9,16 +9,14 @@ A Python-based visualization tool for multi-dimensional spectropolarimetric data
 
 ### End Users (Recommended)
 
-For users who just want to run the viewer:
+For users who just want to install the package:
 
 ```bash
-# Install as a standalone tool with uv (recommended - isolated environment)
-uv tool install git+https://github.com/fzeuner/spectator.git
+# Install from GitHub with pip (not yet on PyPI)
+[uv venv]
+uv pip install git+https://github.com/fzeuner/spectator.git
 
-# Or with pip (installs from GitHub, not PyPI - package not published yet)
-pip install git+https://github.com/fzeuner/spectator.git
-
-# Or add to an existing project with uv (if you have a .venv activated)
+# Or add to an existing project with uv
 uv add git+https://github.com/fzeuner/spectator.git
 ```
 

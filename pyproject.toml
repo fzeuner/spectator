@@ -24,7 +24,8 @@ dependencies = [
     "pyqt6>=6.11.0",
     "pyqtgraph>=0.14.0",
     "scipy>=1.17.1",
-    "pydantic>=2.0"
+    "pydantic>=2.0",
+    "qdarkstyle>=3.2.3",
 ]
 
 [tool.setuptools]
