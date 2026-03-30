@@ -9,6 +9,23 @@ description = "Visualization for spectropolarimetric data"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "Franziska Zeuner" }]
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+    "numpy>=2.4.4",
+    "pyqt6>=6.11.0",
+    "pyqtgraph>=0.14.0",
+    "scipy>=1.17.1",
+    "pydantic>=2.0"
+]
 
 [tool.setuptools]
 package-dir = {"" = "."}
@@ -16,3 +33,13 @@ package-dir = {"" = "."}
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["spectator*"]
+
+[project.urls]
+Repository = "https://github.com/fzeuner/spectator"
+Documentation = "https://github.com/fzeuner/spectator#readme"
+Issues = "https://github.com/fzeuner/spectator/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+]

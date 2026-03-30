@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Run Spectator in the 'spectator' conda environment
+# Run Spectator using uv
 # Usage:
 #   ./z3showred.sh
 # Always runs: examples/z3showred_example.py
+#
+# Requires: uv (https://docs.astral.sh/uv/) installed
 
 set -euo pipefail
 
@@ -32,38 +34,24 @@ export QT_XCB_NO_XI2=1            # X servers without XInput2 support
 export QT_XCB_GL_INTEGRATION=none # Avoid GLX initialization on headless/Xvfb without GLX
 export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe # Prefer CPU rasterization via llvmpipe
 
-# Bootstrap conda into PATH if missing (no need to activate env)
-if ! command -v conda >/dev/null 2>&1; then
-  if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
-    . "$HOME/miniconda3/etc/profile.d/conda.sh"
-  elif [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
-    . "$HOME/anaconda3/etc/profile.d/conda.sh"
-  fi
-fi
-
-# Prefer 'conda run' for reliability across shells
-if command -v conda >/dev/null 2>&1; then
-  # Ensure environment exists
-  if conda env list | awk '{print $1}' | grep -qx "spectator"; then
-    # If no X server is available, attempt to run under a virtual framebuffer
-    RUNNER_PREFIX=()
-    if [[ -z "${DISPLAY:-}" ]]; then
-      if command -v xvfb-run >/dev/null 2>&1; then
-        # Allow overriding virtual screen size via SPECTATOR_SCREEN, default to smaller geometry
-        SCREEN_SPEC="${SPECTATOR_SCREEN:-1600x1200x24}"
-        echo "[info] DISPLAY not set -> using xvfb-run with screen ${SCREEN_SPEC}" >&2
-        RUNNER_PREFIX=(xvfb-run -a -s "-screen 0 ${SCREEN_SPEC}")
-      else
-        echo "[warn] DISPLAY not set and xvfb-run not found; continuing without X server (may fail)" >&2
-      fi
-    fi
-
-    exec "${RUNNER_PREFIX[@]}" conda run -n spectator --no-capture-output python -u "${TARGET_ABS}"
-  else
-    echo "Conda env 'spectator' not found. Create it or adjust the env name in this script." >&2
-    exit 1
-  fi
-else
-  echo "Conda command not found on PATH. Please install Miniconda/Anaconda and try again." >&2
+# Check if uv is available
+if ! command -v uv >/dev/null 2>&1; then
+  echo "Error: uv not found on PATH. Install uv: https://docs.astral.sh/uv/getting-started/installation/" >&2
   exit 1
 fi
+
+# If no X server is available, attempt to run under a virtual framebuffer
+RUNNER_PREFIX=()
+if [[ -z "${DISPLAY:-}" ]]; then
+  if command -v xvfb-run >/dev/null 2>&1; then
+    # Allow overriding virtual screen size via SPECTATOR_SCREEN, default to smaller geometry
+    SCREEN_SPEC="${SPECTATOR_SCREEN:-1600x1200x24}"
+    echo "[info] DISPLAY not set -> using xvfb-run with screen ${SCREEN_SPEC}" >&2
+    RUNNER_PREFIX=(xvfb-run -a -s "-screen 0 ${SCREEN_SPEC}")
+  else
+    echo "[warn] DISPLAY not set and xvfb-run not found; continuing without X server (may fail)" >&2
+  fi
+fi
+
+# Run with uv (uses .venv automatically)
+exec "${RUNNER_PREFIX[@]}" uv run python -u "${TARGET_ABS}"

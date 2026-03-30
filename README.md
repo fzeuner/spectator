@@ -7,26 +7,60 @@ A Python-based visualization tool for multi-dimensional spectropolarimetric data
 
 ## Installation
 
-### Requirements
+### End Users (Recommended)
 
-- Python 3.14+
-- PyQt6
-- NumPy, PyQtGraph, QDarkStyle, SciPy
-
-### Setup
+For users who just want to run the viewer:
 
 ```bash
-# Create conda environment
-conda create -n spectator python=3.14
-conda activate spectator
+# Install as a standalone tool with uv (recommended - isolated environment)
+uv tool install git+https://github.com/fzeuner/spectator.git
 
-# Install dependencies (pyqt has to be version 6 - do not mix with pyqt5!)
-conda install -c conda-forge numpy pyqtgraph qdarkstyle scipy pyqt
+# Or with pip (installs from GitHub, not PyPI - package not published yet)
+pip install git+https://github.com/fzeuner/spectator.git
 
-# Clone and install
+# Or add to an existing project with uv (if you have a .venv activated)
+uv add git+https://github.com/fzeuner/spectator.git
+```
+
+Requirements: Python 3.14+
+
+### Developers
+
+For contributors or those modifying the code:
+
+**Prerequisites:**
+- Python 3.14+
+- [uv](https://docs.astral.sh/uv/) (modern Python package manager)
+
+**Setup:**
+
+```bash
+# 1. Clone the repository
 git clone https://github.com/fzeuner/spectator.git
 cd spectator
-pip install -e .
+
+# 2. Create virtual environment and install dependencies
+uv sync
+
+# 3. The package is now installed in editable mode
+# Run an example to verify:
+uv run python examples/viewer_example.py
+```
+
+**Development commands:**
+
+```bash
+# Run tests
+uv run pytest
+
+# Run an example
+uv run python examples/scan_viewer_example.py
+
+# Add a dependency
+uv add <package-name>
+
+# Update lock file after manual pyproject.toml changes
+uv lock
 ```
 
 ## Usage
@@ -91,10 +125,6 @@ Edit `~/.config/spectator/file_config.json` (local user config, location is defi
 ## Architecture
 
 Spectator follows a **Model-View-Controller (MVC)** architecture pattern for maintainable and scalable code
-
-## License
-
-Scientific research purposes. Contact maintainers for licensing.
 
 ## Acknowledgments
 
