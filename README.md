@@ -13,8 +13,8 @@ For users who just want to install the package:
 
 ```bash
 # Install from GitHub with pip (not yet on PyPI)
-[uv venv]
-uv pip install git+https://github.com/fzeuner/spectator.git
+[uv venv --python 3.14]
+[uv] pip install git+https://github.com/fzeuner/spectator.git
 
 # Or add to an existing project with uv
 uv add git+https://github.com/fzeuner/spectator.git
