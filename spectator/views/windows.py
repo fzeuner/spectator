@@ -24,13 +24,14 @@ class StokesSpatialWindow(BasePlotWidget):
     xChanged = QtCore.pyqtSignal(float) # Emit x value of hLine
     hLineChanged = QtCore.pyqtSignal(float) # Emit when horizontal line position changes
 
-    def __init__(self, data: np.ndarray, stokes_index: int, name: str):
+    def __init__(self, data: np.ndarray, stokes_index: int, name: str, config: AxisConfig = None):
         super().__init__(None)
 
         self.name = name + " spatial"
         
         # Use data model for axis handling
-        config = AxisConfigs.spatial_window()
+        if config is None:
+            config = AxisConfigs.spatial_window()  # Default for spectator_viewer
         self.data_model = PlotDataModel(data, config)
         
         # Initialize current index

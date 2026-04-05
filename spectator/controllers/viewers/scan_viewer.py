@@ -87,7 +87,7 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         
         win_image_spectrum_y = StokesSpectrumYImageWindow(initial_spec_y, stokes_index=i, name=base_name, scale_info=scale_info)
         win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
-        win_spatial_x = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_spatial_x = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name, config=AxisConfigs.spatial_window_normal())
         win_spatial_y = StokesSpatialYWindow(state_data, stokes_index=i, name=base_name)
         win_scan = StokesImageWindow(state_data, stokes_index=i, name=base_name, scale_info=scale_info)
 

@@ -97,7 +97,32 @@ class AxisConfigs:
     
     @staticmethod
     def spatial_window() -> AxisConfig:
-        """Config for StokesSpatialWindow (x vs z).
+        """Config for StokesSpatialWindow - default (z vs x, swapped).
+        
+        Data shape: (spectral, x)
+        Plot: x-axis shows intensity (z), y-axis shows spatial position (x)
+        Draggable line: horizontal (tracks x position)
+        
+        Note: We slice along spectral dimension to get 1D spatial profile.
+        The profile data values go on x-axis, spatial indices go on y-axis.
+        Used by spectator_viewer.
+        """
+        return AxisConfig(
+            x_axis_source='index',  # spatial indices (will be swapped to y)
+            y_axis_source='data',  # intensity values (will be swapped to x)
+            x_data_dim=1,  # spatial dimension for indices
+            y_data_dim=0,  # not used since y comes from data
+            x_label="z",
+            y_label="x",
+            x_units="",
+            y_units="pixel",
+            line_angle=0,  # horizontal line (after swap)
+            swap_plot_coords=True  # setData(data, indices) - swap so data→x, indices→y
+        )
+    
+    @staticmethod
+    def spatial_window_normal() -> AxisConfig:
+        """Config for StokesSpatialWindow - normal orientation (x vs z).
         
         Data shape: (spectral, x)
         Plot: x-axis shows spatial position (x), y-axis shows intensity (z)
@@ -105,6 +130,7 @@ class AxisConfigs:
         
         Note: We slice along spectral dimension to get 1D spatial profile.
         The spatial indices go on x-axis, profile data values go on y-axis.
+        Used by scan_viewer.
         """
         return AxisConfig(
             x_axis_source='index',  # spatial indices on x-axis
