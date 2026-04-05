@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import Tuple, Optional
 
-from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
+from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, TICK_FONT, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
 from .colors import getWidgetColors
 
 SOLID_LINE = QtCore.Qt.PenStyle.SolidLine
@@ -263,6 +263,7 @@ def initialize_image_plot_item(item: pg.PlotItem,
     for axis_name in ['left', 'bottom', 'top']:
         axis = item.getAxis(axis_name)
         axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
+        axis.setStyle(tickFont=TICK_FONT)
         if axis_name == 'left':
             axis.setWidth(30)
         else:  # 'bottom' and 'top'
@@ -300,15 +301,23 @@ def initialize_spectrum_plot_item(plot: pg.PlotItem,
     for axis_name in ['left', 'bottom', 'top']:
         axis = plot.getAxis(axis_name)
         axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
+        axis.setStyle(tickFont=TICK_FONT)
         if axis_name == 'left':
             axis.setWidth(30)
         else:  # 'bottom' and 'top'
             axis.setHeight(15)
 
     plot.setLabel("bottom", text=x_label, units=x_units)
-    plot.setLabel("left", text=y_label, units=y_units)
+    
+    # For spectrum/spatial plots: put y-label on right axis, tick numbers on left
+    if y_label:
+        plot.setLabel("right", text=y_label, units=y_units)
+        plot.getAxis('left').showLabel(False)
+        plot.getAxis('right').enableAutoSIPrefix(False)  # Disable SI prefix on right axis
+    else:
+        plot.setLabel("left", text=y_label, units=y_units)
 
-    # Show axes with tick values on left and top only - no size parameter
+    # Show axes with tick values on left and bottom
     plot.showAxes(True, showValues=(True, True, False, False))
     
     # Set individual axis dimensions for precise control

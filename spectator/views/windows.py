@@ -2,12 +2,12 @@
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
+from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 from typing import List, Tuple, Dict, Optional, Any
 
 from .base_widgets import BasePlotWidget
 from ..utils.constants import (
-    MIN_LINE_DISTANCE, ColorSchemes
+    MIN_LINE_DISTANCE, ColorSchemes, TICK_FONT
 )
 from ..utils.colors import getWidgetColors
 from ..utils.averaging_lines import AveragingLineManager
@@ -45,12 +45,12 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
-        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 90, moveable=True)
+        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 0, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
-        initialize_spectrum_plot_item(self.plotItem, y_label="z", x_label="x", x_units="pixel")
+        initialize_spectrum_plot_item(self.plotItem, y_label="x", y_units="pixel", x_label="z", x_units="")
         
         # Use BasePlotWidget methods for standardized axis setup
         self.setup_standard_axes(left_width=30, top_height=15)
@@ -64,7 +64,7 @@ class StokesSpatialWindow(BasePlotWidget):
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
         self.plot_data = self.full_data[self.current_wl_idx, :]
-        self.plot_curve.setData(self.x, self.plot_data)
+        self.plot_curve.setData(self.plot_data, self.x)
 
         # Set initial hLine position to center
         initial_x = (self.x[0] + self.x[-1]) / 2 if self.x.size > 1 else (self.x[0] if self.x.size > 0 else 0)
@@ -115,7 +115,7 @@ class StokesSpatialWindow(BasePlotWidget):
 
         self.current_wl_idx = wl_idx
         self.plot_data = self.full_data[self.current_wl_idx, :]
-        self.plot_curve.setData(self.x, self.plot_data)
+        self.plot_curve.setData(self.plot_data, self.x)
         self._update_label() # Update label after data change    
 
     def update_spatial_data_wl_avg(self, wl_idx_l: int, wl_idx_c: int , wl_idx_h: int):
@@ -123,7 +123,7 @@ class StokesSpatialWindow(BasePlotWidget):
 
             self.current_wl_idx_avg = wl_idx_c
             self.plot_data_avg = (self.full_data[wl_idx_l:wl_idx_h,:]).mean(axis=0)
-            self.plot_curve_avg.setData(self.x, self.plot_data_avg)
+            self.plot_curve_avg.setData(self.plot_data_avg, self.x)
             self._update_label_wl_avg()     
             
     def clear_averaging_regions(self):
@@ -207,7 +207,7 @@ class StokesSpatialWindow(BasePlotWidget):
         
         self.current_spectral_idx = spectral_idx
         self.plot_data = self.full_data[spectral_idx, :]
-        self.plot_curve.setData(self.x, self.plot_data)
+        self.plot_curve.setData(self.plot_data, self.x)
         self._update_label()  # Use consistent label format without λ
     
     def set_spectral_limits(self, x_min: float, x_max: float):
@@ -232,7 +232,7 @@ class StokesSpatialWindow(BasePlotWidget):
         # Refresh plot using spectral index if available, otherwise current_wl_idx
         idx = self.current_spectral_idx
         self.plot_data = self.full_data[idx, :]
-        self.plot_curve.setData(self.x, self.plot_data)
+        self.plot_curve.setData(self.plot_data, self.x)
         self._update_label()
 
 class StokesSpectrumWindow(BasePlotWidget):
@@ -265,7 +265,7 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))      
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
-        initialize_spectrum_plot_item(self.plotItem)
+        initialize_spectrum_plot_item(self.plotItem, y_label="z")
         
         # Use BasePlotWidget methods for standardized axis setup
         self.setup_standard_axes(left_width=30, top_height=15)
@@ -728,6 +728,11 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.setup_standard_axes(left_width=30, top_height=15)
         self.setup_custom_ticks(spectral_range=self.n_spectral, spatial_range=self.n_x_pixel)
         self.configure_axis_styling(hide_left_label=True, right_label="x", right_units="pixel")
+        self.plotItem.getAxis('bottom').setStyle(showValues=False)
+        self.plotItem.getAxis('top').setStyle(showValues=True, tickFont=TICK_FONT)
+        spectral_ticks_pix = np.linspace(0, self.n_spectral - 1, 8)
+        spectral_ticks = [(tick, f'{tick:.0f}') for tick in spectral_ticks_pix]
+        self.plotItem.getAxis('top').setTicks([spectral_ticks])
         self.setup_viewbox_limits(x_max=self.n_spectral - 1, y_max=self.n_x_pixel - 1, 
                                  min_range=1.0, enable_rect_zoom=True)
 
@@ -1072,6 +1077,11 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
         self.setup_standard_axes(left_width=30, top_height=15)
         self.setup_custom_ticks(spectral_range=self.n_spectral, spatial_range=self.n_y_pixel)
         self.configure_axis_styling(hide_left_label=True, right_label="y", right_units="pixel")
+        self.plotItem.getAxis('bottom').setStyle(showValues=False)
+        self.plotItem.getAxis('top').setStyle(showValues=True, tickFont=TICK_FONT)
+        spectral_ticks_pix = np.linspace(0, self.n_spectral - 1, 8)
+        spectral_ticks = [(tick, f'{tick:.0f}') for tick in spectral_ticks_pix]
+        self.plotItem.getAxis('top').setTicks([spectral_ticks])
         self.setup_viewbox_limits(x_max=self.n_spectral - 1, y_max=self.n_y_pixel - 1, min_range=1.0, enable_rect_zoom=True)
         try:
             self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)

@@ -32,6 +32,11 @@ HOVER_COLOR_DEFAULT = 'red'       # Default hover color for other moveable lines
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
 DEFAULT_LABEL_SIZE = '8pt'
+DEFAULT_TICK_FONT_SIZE = 8  # Font size for axis tick labels
+
+# Import QtGui for font object
+from pyqtgraph.Qt import QtGui
+TICK_FONT = QtGui.QFont('Arial', DEFAULT_TICK_FONT_SIZE)
 
 # Viewer / data limits
 MAX_STATES = 8
@@ -156,6 +161,8 @@ __all__ = [
     'HOVER_COLOR_DEFAULT',
     'DEFAULT_FONT_SIZE',
     'DEFAULT_LABEL_SIZE',
+    'DEFAULT_TICK_FONT_SIZE',
+    'TICK_FONT',
     'MAX_STATES',
     'MAX_SPATIAL_AXES',
     'DEFAULT_DATA_TYPE',
