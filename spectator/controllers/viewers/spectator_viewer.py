@@ -77,7 +77,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         try:
             if hasattr(win_image_spectrum, 'hLine'):
                 x_pos = float(win_image_spectrum.hLine.value())
-                n_x = win_spectrum.full_data.shape[1]
+                n_x = win_spectrum.data_model.get_dimension_size(1)
                 x_idx = int(np.clip(np.round(x_pos), 0, n_x - 1))
                 win_spectrum.update_spectrum_data(x_idx)
         except Exception as e:

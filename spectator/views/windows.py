@@ -17,6 +17,7 @@ from ..utils import (
     set_plot_wavelength_range, reset_plot_wavelength_range, update_crosshair_from_mouse
 )
 from ..utils.plotting import SOLID_LINE
+from ..models import PlotDataModel, AxisConfigs
 
 class StokesSpatialWindow(BasePlotWidget):
     
@@ -27,9 +28,13 @@ class StokesSpatialWindow(BasePlotWidget):
         super().__init__(None)
 
         self.name = name + " spatial"
-        self.full_data = data  # Store the full (spectral, x) data
-        self.spectral = np.arange(self.full_data.shape[0])
-        self.x = np.arange(self.full_data.shape[1])
+        
+        # Use data model for axis handling
+        config = AxisConfigs.spatial_window()
+        self.data_model = PlotDataModel(data, config)
+        
+        # Initialize current index
+        self.current_wl_idx = self.data_model.get_dimension_size(0) // 2
 
         self._setup_plot_items()
         self._setup_connections()
@@ -45,16 +50,22 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
-        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 0, moveable=True)
+        # Use vertical line (angle=90) since x is now on x-axis
+        config = self.data_model.config
+        line_angle = 90 if config.line_angle == 0 else 0  # config.line_angle=0 means vertical in our convention
+        self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), line_angle, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
-        initialize_spectrum_plot_item(self.plotItem, y_label="x", y_units="pixel", x_label="z", x_units="")
+        # Use axis labels from config
+        config = self.data_model.config
+        initialize_spectrum_plot_item(self.plotItem, y_label=config.y_label, y_units=config.y_units, 
+                                      x_label=config.x_label, x_units=config.x_units)
         
         # Use BasePlotWidget methods for standardized axis setup
         self.setup_standard_axes(left_width=30, top_height=15)
-        self.setup_custom_ticks(spectral_range=len(self.x))
+        self.setup_custom_ticks(spectral_range=self.data_model.get_dimension_size(1))
 
     def _setup_connections(self):
         """Connects signals to slots."""
@@ -63,11 +74,14 @@ class StokesSpatialWindow(BasePlotWidget):
 
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
-        self.plot_data = self.full_data[self.current_wl_idx, :]
-        self.plot_curve.setData(self.plot_data, self.x)
+        # Get slice using data model
+        self.plot_data = self.data_model.get_slice_at_index(0, self.current_wl_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
 
         # Set initial hLine position to center
-        initial_x = (self.x[0] + self.x[-1]) / 2 if self.x.size > 1 else (self.x[0] if self.x.size > 0 else 0)
+        x_indices = self.data_model.get_index_array(1)
+        initial_x = (x_indices[0] + x_indices[-1]) / 2 if x_indices.size > 1 else (x_indices[0] if x_indices.size > 0 else 0)
         self.update_x_line(initial_x) 
 
     def _update_label(self):
@@ -75,7 +89,8 @@ class StokesSpatialWindow(BasePlotWidget):
         # Get the spatial position from the horizontal line
         spatial_pos = self.hLine.value()
         # Find the closest spatial index
-        spatial_idx = np.argmin(np.abs(self.x - spatial_pos)) if self.x.size > 0 else 0
+        x_indices = self.data_model.get_index_array(1)
+        spatial_idx = np.argmin(np.abs(x_indices - spatial_pos)) if x_indices.size > 0 else 0
         
         # Get the z value (intensity) at the current position
         intensity_value = np.nan
@@ -109,21 +124,22 @@ class StokesSpatialWindow(BasePlotWidget):
 
     def update_spatial_data(self, wl_idx: int):
         """Updates the plotted spectrum data based on a new spatial index."""
-        if not (0 <= wl_idx < self.full_data.shape[0]):
-            print(f"Error: Provided wl_idx {wl_idx} is out of bounds for data with {self.full_data.shape[0]} spectral pixels.")
-            return
-
+        # Validate and clamp index
+        wl_idx = self.data_model.validate_index(0, wl_idx)
+        
         self.current_wl_idx = wl_idx
-        self.plot_data = self.full_data[self.current_wl_idx, :]
-        self.plot_curve.setData(self.plot_data, self.x)
-        self._update_label() # Update label after data change    
+        self.plot_data = self.data_model.get_slice_at_index(0, wl_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
+        self._update_label()    
 
     def update_spatial_data_wl_avg(self, wl_idx_l: int, wl_idx_c: int , wl_idx_h: int):
             """Updates the plotted spectrum data based on a new spatial indices of averaging regions."""
 
             self.current_wl_idx_avg = wl_idx_c
-            self.plot_data_avg = (self.full_data[wl_idx_l:wl_idx_h,:]).mean(axis=0)
-            self.plot_curve_avg.setData(self.plot_data_avg, self.x)
+            self.plot_data_avg = self.data_model.get_averaged_slice(0, wl_idx_l, wl_idx_h)
+            x_coords, y_coords = self.data_model.get_plot_data(self.plot_data_avg)
+            self.plot_curve_avg.setData(x_coords, y_coords)
             self._update_label_wl_avg()     
             
     def clear_averaging_regions(self):
@@ -145,7 +161,8 @@ class StokesSpatialWindow(BasePlotWidget):
                 # Get the spatial position from the horizontal line
                 spatial_pos = self.hLine.value()
                 # Find the closest spatial index
-                spatial_idx = np.argmin(np.abs(self.x - spatial_pos)) if self.x.size > 0 else 0
+                x_indices = self.data_model.get_index_array(1)
+                spatial_idx = np.argmin(np.abs(x_indices - spatial_pos)) if x_indices.size > 0 else 0
                 
                 # Get the z value (intensity) at the intersection of yellow line and white horizontal line
                 has_avg_data = hasattr(self, 'plot_data_avg') and isinstance(self.plot_data_avg, np.ndarray)
@@ -164,20 +181,22 @@ class StokesSpatialWindow(BasePlotWidget):
     def handle_spectral_avg_line_movement(self, x_low: float, x_center: float, x_high: float, source_stokes_index: int):
         """Handle spectral averaging line movement from spectrum image window."""
         # Convert x positions to spectral indices
-        x_idx_low = int(np.clip(np.round(x_low), 0, self.full_data.shape[0] - 1))
-        x_idx_center = int(np.clip(np.round(x_center), 0, self.full_data.shape[0] - 1))
-        x_idx_high = int(np.clip(np.round(x_high), 0, self.full_data.shape[0] - 1))
+        x_idx_low = self.data_model.validate_index(0, int(np.round(x_low)))
+        x_idx_center = self.data_model.validate_index(0, int(np.round(x_center)))
+        x_idx_high = self.data_model.validate_index(0, int(np.round(x_high)))
         
         # Update spatial data with spectral averaging
         self.update_spatial_data_wl_avg(x_idx_low, x_idx_center, x_idx_high)
 
     def update_spatial_range(self, min_val, max_val):
         """Updates the spatial (x pixel) axis range of the spatial plot (x-axis)."""
-        set_plot_wavelength_range(self.plotItem, self.x, min_val, max_val, axis='x')
+        x_indices = self.data_model.get_index_array(1)
+        set_plot_wavelength_range(self.plotItem, x_indices, min_val, max_val, axis='x')
 
     def reset_spatial_range(self):
         """Resets the spatial (x pixel) axis range to full range on the spatial plot (x-axis)."""
-        reset_plot_wavelength_range(self.plotItem, self.x, axis='x')
+        x_indices = self.data_model.get_index_array(1)
+        reset_plot_wavelength_range(self.plotItem, x_indices, axis='x')
     
     def set_spatial_limits(self, y_min: float, y_max: float):
         """Set Y-axis limits based on spatial range from SpectrumImageWindow zoom."""
@@ -196,19 +215,19 @@ class StokesSpatialWindow(BasePlotWidget):
         self.hLine.blockSignals(False)
         
         # Update spatial data slice based on vertical line (spectral) position
-        spectral_idx = np.clip(int(np.round(xpos_wl)), 0, self.full_data.shape[0] - 1)
+        spectral_idx = self.data_model.validate_index(0, int(np.round(xpos_wl)))
         self.update_spatial_data_spectral(spectral_idx)
     
     def update_spatial_data_spectral(self, spectral_idx: int):
         """Update spatial data based on spectral index."""
-        if not (0 <= spectral_idx < self.full_data.shape[0]):
-            print(f"Error: Provided spectral_idx {spectral_idx} is out of bounds for data with {self.full_data.shape[0]} spectral pixels.")
-            return
+        # Validate and clamp index
+        spectral_idx = self.data_model.validate_index(0, spectral_idx)
         
         self.current_spectral_idx = spectral_idx
-        self.plot_data = self.full_data[spectral_idx, :]
-        self.plot_curve.setData(self.plot_data, self.x)
-        self._update_label()  # Use consistent label format without λ
+        self.plot_data = self.data_model.get_slice_at_index(0, spectral_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
+        self._update_label()
     
     def set_spectral_limits(self, x_min: float, x_max: float):
         """Set X-axis limits based on spectral range from SpectrumImageWindow zoom."""
@@ -221,18 +240,18 @@ class StokesSpatialWindow(BasePlotWidget):
         if data.ndim != 2:
             raise ValueError(f"StokesSpatialWindow expects 2D data (spectral, x); got shape {data.shape}")
 
-        self.full_data = data
-        self.spectral = np.arange(self.full_data.shape[0])
-        self.x = np.arange(self.full_data.shape[1])
+        # Update data model
+        self.data_model.update_data(data)
 
         # Keep current indices in bounds
-        self.current_wl_idx = int(np.clip(getattr(self, 'current_wl_idx', 0), 0, self.full_data.shape[0] - 1))
-        self.current_spectral_idx = int(np.clip(getattr(self, 'current_spectral_idx', self.current_wl_idx), 0, self.full_data.shape[0] - 1))
+        self.current_wl_idx = self.data_model.validate_index(0, getattr(self, 'current_wl_idx', 0))
+        self.current_spectral_idx = self.data_model.validate_index(0, getattr(self, 'current_spectral_idx', self.current_wl_idx))
 
         # Refresh plot using spectral index if available, otherwise current_wl_idx
         idx = self.current_spectral_idx
-        self.plot_data = self.full_data[idx, :]
-        self.plot_curve.setData(self.plot_data, self.x)
+        self.plot_data = self.data_model.get_slice_at_index(0, idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
         self._update_label()
 
 class StokesSpectrumWindow(BasePlotWidget):
@@ -243,8 +262,13 @@ class StokesSpectrumWindow(BasePlotWidget):
         super().__init__(None)
 
         self.name = name + " spectrum"
-        self.full_data = data  # Store the full (spectral, x) data
-        self.spectral = np.arange(self.full_data.shape[0])
+        
+        # Use data model for axis handling
+        config = AxisConfigs.spectrum_window()
+        self.data_model = PlotDataModel(data, config)
+        
+        # Initialize current index
+        self.current_x_idx = self.data_model.get_dimension_size(1) // 2
 
         self._setup_plot_items()
         self._setup_connections()
@@ -277,26 +301,25 @@ class StokesSpectrumWindow(BasePlotWidget):
 
     def _initialize_plot_state(self):
         """Sets initial plot data, vLine position, and updates labels."""
-        # Initialize current_x_idx to center if not set
-        if not hasattr(self, 'current_x_idx'):
-            n_x = self.full_data.shape[1]
-            self.current_x_idx = n_x // 2 if n_x > 0 else 0
-        # Set initial plot data based on current_x_idx
-        self.plot_data = self.full_data[:, self.current_x_idx]
-        self.plot_curve.setData(self.spectral, self.plot_data)
+        # Get slice using data model
+        self.plot_data = self.data_model.get_slice_at_index(1, self.current_x_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
 
         # Emit initial Y range and update label
         self._emit_y_range_changed(None, self.plotItem.viewRange()[1])
 
         # Set initial vLine position to center
-        initial_spectral = (self.spectral[0] + self.spectral[-1]) / 2 if self.spectral.size > 1 else (self.spectral[0] if self.spectral.size > 0 else 0)
+        spectral_indices = self.data_model.get_index_array(0)
+        initial_spectral = (spectral_indices[0] + spectral_indices[-1]) / 2 if spectral_indices.size > 1 else (spectral_indices[0] if spectral_indices.size > 0 else 0)
         self.update_spectral_line(initial_spectral) 
 
     def _update_label(self):
         """Updates the coordinate label."""
         spectral_value = self.vLine.value()
         # Find the closest index to the current spectral value
-        spectral_idx = np.argmin(np.abs(self.spectral - spectral_value)) if self.spectral.size > 0 else -1
+        spectral_indices = self.data_model.get_index_array(0)
+        spectral_idx = np.argmin(np.abs(spectral_indices - spectral_value)) if spectral_indices.size > 0 else -1
         intensity_value = np.nan
         if isinstance(self.plot_data, np.ndarray) and self.plot_data.ndim == 1 and 0 <= spectral_idx < self.plot_data.size:
             intensity_value = self.plot_data[spectral_idx]
@@ -307,7 +330,8 @@ class StokesSpectrumWindow(BasePlotWidget):
         """Updates the coordinate label for averaged region."""
         # Use the white line position to pick the averaged z value, but only show z=
         wl_value = self.vLine.value() if hasattr(self, 'vLine') and self.vLine else self.current_x_idx_avg
-        wl_idx = np.argmin(np.abs(self.spectral - wl_value)) if self.spectral.size > 0 else -1
+        spectral_indices = self.data_model.get_index_array(0)
+        wl_idx = np.argmin(np.abs(spectral_indices - wl_value)) if spectral_indices.size > 0 else -1
         intensity_value = np.nan
         if isinstance(self.plot_data_avg, np.ndarray) and self.plot_data_avg.ndim == 1 and 0 <= wl_idx < self.plot_data_avg.size:
             intensity_value = self.plot_data_avg[wl_idx]
@@ -326,11 +350,13 @@ class StokesSpectrumWindow(BasePlotWidget):
 
     def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
         """Updates the spectral-axis range of the spectrum plot."""
-        set_plot_wavelength_range(self.plotItem, self.spectral, min_val, max_val, axis='x')
+        spectral_indices = self.data_model.get_index_array(0)
+        set_plot_wavelength_range(self.plotItem, spectral_indices, min_val, max_val, axis='x')
     
     def reset_spectral_range(self):
         """Resets the spectral-axis range to the initial maximum range."""
-        reset_plot_wavelength_range(self.plotItem, self.spectral, axis='x')
+        spectral_indices = self.data_model.get_index_array(0)
+        reset_plot_wavelength_range(self.plotItem, spectral_indices, axis='x')
     
     def set_spectral_limits(self, x_min: float, x_max: float):
         """Set X-axis limits based on spectral range from SpectrumImageWindow zoom."""
@@ -356,29 +382,30 @@ class StokesSpectrumWindow(BasePlotWidget):
 
     def update_spectrum_data(self, x_idx: int):
         """Updates the plotted spectrum data based on a new spatial index."""
-        if not (0 <= x_idx < self.full_data.shape[1]):
-            print(f"Error: Provided x_idx {x_idx} is out of bounds for data with {self.full_data.shape[1]} spatial pixels.")
-            return
+        # Validate and clamp index
+        x_idx = self.data_model.validate_index(1, x_idx)
 
         self.current_x_idx = x_idx
-        self.plot_data = self.full_data[:, self.current_x_idx]
-        self.plot_curve.setData(self.spectral, self.plot_data)
-        self._update_label() # Update label after data change    
+        self.plot_data = self.data_model.get_slice_at_index(1, x_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
+        self._update_label()    
 
     def update_spectrum_data_x_avg(self, x_idx_l: int, x_idx_c: int , x_idx_h: int):
         """Updates the plotted spectrum data based on a new spatial indices of averaging regions."""
         self.current_x_idx_avg = x_idx_c
-        self.plot_data_avg = (self.full_data[:, x_idx_l:x_idx_h+1]).mean(axis=1)
-        self.plot_curve_spectral_avg.setData(self.spectral, self.plot_data_avg)
+        self.plot_data_avg = self.data_model.get_averaged_slice(1, x_idx_l, x_idx_h)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data_avg)
+        self.plot_curve_spectral_avg.setData(x_coords, y_coords)
         self._update_label_x_avg()
     
     @QtCore.pyqtSlot(float, float, float, int)
     def handle_spatial_avg_line_movement(self, y_low: float, y_center: float, y_high: float, source_stokes_index: int):
         """Handle spatial averaging line movement from spectrum image window."""
         # Convert y positions to spatial indices
-        y_idx_low = int(np.clip(np.round(y_low), 0, self.full_data.shape[1] - 1))
-        y_idx_center = int(np.clip(np.round(y_center), 0, self.full_data.shape[1] - 1))
-        y_idx_high = int(np.clip(np.round(y_high), 0, self.full_data.shape[1] - 1))
+        y_idx_low = self.data_model.validate_index(1, int(np.round(y_low)))
+        y_idx_center = self.data_model.validate_index(1, int(np.round(y_center)))
+        y_idx_high = self.data_model.validate_index(1, int(np.round(y_high)))
         
         # Update spectrum data with spatial averaging
         self.update_spectrum_data_x_avg(y_idx_low, y_idx_center, y_idx_high)
@@ -401,15 +428,16 @@ class StokesSpectrumWindow(BasePlotWidget):
         if data.ndim != 2:
             raise ValueError(f"StokesSpectrumWindow expects 2D data (spectral, x); got shape {data.shape}")
 
-        self.full_data = data
-        self.spectral = np.arange(self.full_data.shape[0])
+        # Update data model
+        self.data_model.update_data(data)
 
         # Clamp current_x_idx
-        self.current_x_idx = int(np.clip(getattr(self, 'current_x_idx', 0), 0, self.full_data.shape[1] - 1))
+        self.current_x_idx = self.data_model.validate_index(1, getattr(self, 'current_x_idx', 0))
 
         # Refresh plot
-        self.plot_data = self.full_data[:, self.current_x_idx]
-        self.plot_curve.setData(self.spectral, self.plot_data)
+        self.plot_data = self.data_model.get_slice_at_index(1, self.current_x_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
         self._emit_y_range_changed(None, self.plotItem.viewRange()[1])
         self._update_label()
 
@@ -542,16 +570,22 @@ class StokesSpectrumImageWindow(BasePlotWidget):
     spatialAvgRegionChanged = QtCore.pyqtSignal(float, float, float, int)
     viewRangeChanged = QtCore.pyqtSignal(float, float, float, float) # Emit (x_min, x_max, y_min, y_max) when zoom changes
 
-    def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
+    def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None, config: AxisConfig = None):
         super().__init__(None)
 
         self.stokes_index = stokes_index
         self.name = name
-        self.data = data
         self.scale_info = scale_info
-        self.n_spectral, self.n_x_pixel = self.data.shape 
-        self.spectral_pixels = np.arange(self.n_spectral) 
-        self.spatial_pixels = np.arange(self.n_x_pixel) 
+        
+        # Use data model with axis configuration
+        if config is None:
+            config = AxisConfigs.spectrum_image_window_default()
+        self.data_model = PlotDataModel(data, config)
+        
+        # Store original data for image display
+        self.data = data
+        self.n_spectral = self.data_model.get_dimension_size(0)
+        self.n_x_pixel = self.data_model.get_dimension_size(1) 
 
         self._setup_image_plot()
         self._setup_axes()
@@ -564,21 +598,32 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.histogram = create_histogram(self.image_item, self.layout, self.scale_info, self.stokes_index)
 
         # Respect pyqtgraph's imageAxisOrder to avoid unintended transposes across versions
-        # - 'row-major': array is (rows=y, cols=x) -> need transpose because data is (spectral=x, spatial=y)
-        # - 'col-major': array is (x, y) -> no transpose needed
         axis_order = pg.getConfigOption('imageAxisOrder')
-        if axis_order == 'row-major':
-            img = self.data.T
+        
+        # Transpose data based on axis configuration
+        config = self.data_model.config
+        if config.x_data_dim == 0 and config.y_data_dim == 1:
+            # Default: spectral on x, spatial on y
+            img = self.data.T if axis_order == 'row-major' else self.data
         else:
-            img = self.data
+            # Swapped: spatial on x, spectral on y
+            img = self.data if axis_order == 'row-major' else self.data.T
+        
         self.image_item.setImage(img)
 
-        x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
-        x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
-        y_min_x = self.spatial_pixels[0] if self.spatial_pixels.size > 0 else 0
-        y_max_x = self.spatial_pixels[-1] if self.spatial_pixels.size > 0 else self.n_x_pixel
+        # Set image rectangle based on which dimension is on which axis
+        if config.x_data_dim == 0:
+            # Spectral on x-axis, spatial on y-axis (default)
+            x_min, x_max = 0, self.n_spectral - 1
+            y_min, y_max = 0, self.n_x_pixel - 1
+        else:
+            # Spatial on x-axis, spectral on y-axis (swapped)
+            x_min, x_max = 0, self.n_x_pixel - 1
+            y_min, y_max = 0, self.n_spectral - 1
 
-        self.image_item.setRect(x_min_spectral, y_min_x, x_max_spectral - x_min_spectral, y_max_x - y_min_x)
+        width = x_max - x_min
+        height = y_max - y_min
+        self.image_item.setRect(x_min, y_min, width, height)
 
         self.plotItem.setMenuEnabled(False)
         self.plotItem.vb.mouseButtons = {
@@ -720,26 +765,58 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         return np.clip(pos, 0, self.n_x_pixel - 1)
 
     def _setup_axes(self):
+        config = self.data_model.config
+        
+        # Get axis labels from config
         initialize_image_plot_item(self.plotItem, y_values=True,
-                                y_label="x", y_units="pixel", 
-                                x_label="λ", x_units="pixel") 
-
-        # Use BasePlotWidget methods for standardized axis setup
+                                y_label=config.y_label, y_units=config.y_units, 
+                                x_label=config.x_label, x_units=config.x_units)
+        
         self.setup_standard_axes(left_width=30, top_height=15)
-        self.setup_custom_ticks(spectral_range=self.n_spectral, spatial_range=self.n_x_pixel)
-        self.configure_axis_styling(hide_left_label=True, right_label="x", right_units="pixel")
+        
+        # Set ticks based on which dimension is on which axis
+        # config.x_data_dim: 0=spectral, 1=spatial
+        if config.x_data_dim == 0:
+            # Spectral on x-axis, spatial on y-axis (default)
+            x_range = self.n_spectral
+            y_range = self.n_x_pixel
+        else:
+            # Spatial on x-axis, spectral on y-axis (swapped)
+            x_range = self.n_x_pixel
+            y_range = self.n_spectral
+        
+        # Top axis shows x-axis dimension
+        x_ticks_pix = np.linspace(0, x_range - 1, 8)
+        x_ticks = [(tick, f'{tick:.0f}') for tick in x_ticks_pix]
+        self.plotItem.getAxis('top').setTicks([x_ticks])
+        
+        # Also set bottom axis to same ticks (even though it's hidden) to prevent auto-ticks
+        self.plotItem.getAxis('bottom').setTicks([x_ticks])
+        
+        # Right axis shows y-axis dimension
+        y_ticks_pix = np.linspace(0, y_range - 1, 6)
+        y_ticks = [(tick, f'{tick:.0f}') for tick in y_ticks_pix]
+        self.plotItem.getAxis('right').setTicks([y_ticks])
+        
+        # Left axis should also show y-axis dimension ticks
+        self.plotItem.getAxis('left').setTicks([y_ticks])
+        
+        # Configure axis styling
+        self.plotItem.getAxis('left').showLabel(False)
+        self.plotItem.getAxis('left').setStyle(showValues=True)
+        self.plotItem.getAxis('left').enableAutoSIPrefix(False)
+        self.plotItem.getAxis('right').setLabel(text=config.y_label, units=config.y_units)
         self.plotItem.getAxis('bottom').setStyle(showValues=False)
         self.plotItem.getAxis('top').setStyle(showValues=True, tickFont=TICK_FONT)
-        spectral_ticks_pix = np.linspace(0, self.n_spectral - 1, 8)
-        spectral_ticks = [(tick, f'{tick:.0f}') for tick in spectral_ticks_pix]
-        self.plotItem.getAxis('top').setTicks([spectral_ticks])
-        self.setup_viewbox_limits(x_max=self.n_spectral - 1, y_max=self.n_x_pixel - 1, 
-                                 min_range=1.0, enable_rect_zoom=True)
-
-        # Set initial ranges exactly to the image size (no extra padding)
+        
+        # Set viewbox limits
+        x_max = x_range - 1
+        y_max = y_range - 1
+        self.setup_viewbox_limits(x_max=x_max, y_max=y_max, min_range=1.0, enable_rect_zoom=True)
+        
         try:
-            self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)
-            self.plotItem.setYRange(0, self.n_x_pixel - 1, padding=0)
+            self.plotItem.setXRange(0, x_max, padding=0)
+            self.plotItem.setYRange(0, y_max, padding=0)
         except Exception:
             pass
 
@@ -757,13 +834,15 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.plotItem.scene().sigMouseClicked.connect(self.mouseClicked)
         self.last_valid_crosshair_pos = None
         self.crosshair_locked = False
-        # Initialize crosshair at image center
-        mid_spectral = (self.n_spectral - 1) / 2
-        mid_spatial = (self.n_x_pixel - 1) / 2
-        self.vLine.setPos(mid_spectral)
-        self.hLine.setPos(mid_spatial)
-        self.last_valid_crosshair_pos = (mid_spectral, mid_spatial)
-        self.updateLabelFromCrosshair(mid_spectral, mid_spatial)
+        # Initialize crosshair at image center using data model
+        config = self.data_model.config
+        mid_x = (self.data_model.get_dimension_size(config.x_data_dim) - 1) / 2
+        mid_y = (self.data_model.get_dimension_size(config.y_data_dim) - 1) / 2
+        
+        self.vLine.setPos(mid_x)
+        self.hLine.setPos(mid_y)
+        self.last_valid_crosshair_pos = (mid_x, mid_y)
+        self.updateLabelFromCrosshair(mid_x, mid_y)
         
         # Add yellow spectral averaging label using same positioning as spectrum windows
         colors = getWidgetColors()
@@ -774,13 +853,19 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.label_avg_spatial = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))
         self.graphics_widget.addItem(self.label_avg_spatial, row=1, col=2)
         
-        # Initialize averaging line managers now that labels exist
+        # Initialize averaging line managers based on axis configuration
+        config = self.data_model.config
+        # Spectral averaging: along spectral dimension (dim 0)
+        # Spatial averaging: along spatial dimension (dim 1)
+        spectral_orientation = 'horizontal' if config.x_data_dim == 1 else 'vertical'
+        spatial_orientation = 'vertical' if config.x_data_dim == 1 else 'horizontal'
+        
         self.spectral_manager = AveragingLineManager(
-            self.plotItem, 'vertical', self.n_spectral, self.stokes_index, 
+            self.plotItem, spectral_orientation, self.n_spectral, self.stokes_index, 
             'averaging_v', self.label_avg_spectral
         )
         self.spatial_manager = AveragingLineManager(
-            self.plotItem, 'horizontal', self.n_x_pixel, self.stokes_index,
+            self.plotItem, spatial_orientation, self.n_x_pixel, self.stokes_index,
             'averaging_h', self.label_avg_spatial
         )
         
@@ -829,87 +914,146 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         if event.double():
             mouse_point = self.plotItem.vb.mapSceneToView(event.scenePos())
             if not self.crosshair_locked:
-                self.vLine.setPos(mouse_point.x())
-                self.hLine.setPos(mouse_point.y())
-                self.last_valid_crosshair_pos = (mouse_point.x(), mouse_point.y())
-                self.updateLabelFromCrosshair(mouse_point.x(), mouse_point.y())
+                xpos, ypos = mouse_point.x(), mouse_point.y()
+                self.vLine.setPos(xpos)
+                self.hLine.setPos(ypos)
+                self.last_valid_crosshair_pos = (xpos, ypos)
+                self.updateLabelFromCrosshair(xpos, ypos)
             self.crosshair_locked = not self.crosshair_locked
 
     def updateCrosshairAndLabel(self, pos: QtCore.QPointF):
         if not self.crosshair_locked:
             crosshair_pos = update_crosshair_from_mouse(self.plotItem, self.vLine, self.hLine, pos)
             if crosshair_pos is not None:
-                xpos_wl, ypos_spatial_x = crosshair_pos
-                self.last_valid_crosshair_pos = (xpos_wl, ypos_spatial_x)
-                self.updateLabelFromCrosshair(xpos_wl, ypos_spatial_x)
-                self.crosshairMoved.emit(xpos_wl, ypos_spatial_x, self.stokes_index)
+                xpos, ypos = crosshair_pos
+                self.last_valid_crosshair_pos = (xpos, ypos)
+                self.updateLabelFromCrosshair(xpos, ypos)
+                
+                # Emit spectral and spatial values in consistent order (spectral, spatial)
+                config = self.data_model.config
+                if config.x_data_dim == 0:  # spectral on x-axis
+                    spectral_pos, spatial_pos = xpos, ypos
+                else:  # spatial on x-axis
+                    spectral_pos, spatial_pos = ypos, xpos
+                
+                self.crosshairMoved.emit(spectral_pos, spatial_pos, self.stokes_index)
         elif self.last_valid_crosshair_pos:
             self.updateLabelFromCrosshair(*self.last_valid_crosshair_pos)
 
-    def updateLabelFromCrosshair(self, xpos_wl: float, ypos_spatial_x: float):
-        index_spectral = np.clip(int(np.round(xpos_wl)), 0, self.n_spectral - 1)
-        index_x = np.clip(int(np.round(ypos_spatial_x)), 0, self.n_x_pixel - 1)
-
-        intensity = self.data[index_spectral, index_x] 
-        # Compact label: use 'l' for spectral and omit the 'x' prefix while keeping the spatial value
-        self.label.setText(f"l: {xpos_wl:.0f}, {ypos_spatial_x:.0f}, z: {intensity:.5f}", size='8pt') 
+    def updateLabelFromCrosshair(self, xpos: float, ypos: float):
+        config = self.data_model.config
+        
+        # xpos and ypos are plot coordinates
+        # Data is always stored as (spectral, spatial_x)
+        # Need to map plot coordinates to data indices
+        if config.x_data_dim == 0:  # spectral on x-axis, spatial on y-axis
+            spectral_idx = int(np.clip(np.round(xpos), 0, self.n_spectral - 1))
+            spatial_idx = int(np.clip(np.round(ypos), 0, self.n_x_pixel - 1))
+        else:  # spatial on x-axis, spectral on y-axis
+            spatial_idx = int(np.clip(np.round(xpos), 0, self.n_x_pixel - 1))
+            spectral_idx = int(np.clip(np.round(ypos), 0, self.n_spectral - 1))
+        
+        # Access data in original (spectral, spatial_x) order
+        intensity = self.data[spectral_idx, spatial_idx]
+        
+        self.label.setText(f"{config.x_label}: {xpos:.0f}, {config.y_label}: {ypos:.0f}, z: {intensity:.5f}", size='8pt') 
 
     def update_spectral_range(self, min_val, max_val):
-        set_plot_wavelength_range(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x') 
+        config = self.data_model.config
+        axis = 'x' if config.x_data_dim == 0 else 'y'
+        spectral_indices = self.data_model.get_index_array(0)
+        set_plot_wavelength_range(self.plotItem, spectral_indices, min_val, max_val, axis=axis) 
 
     def reset_spectral_range(self):
-        reset_plot_wavelength_range(self.plotItem, self.spectral_pixels, axis='x') 
+        config = self.data_model.config
+        axis = 'x' if config.x_data_dim == 0 else 'y'
+        spectral_indices = self.data_model.get_index_array(0)
+        reset_plot_wavelength_range(self.plotItem, spectral_indices, axis=axis) 
 
     def update_spatial_range(self, min_val, max_val):
-        """Updates the spatial (x pixel) axis range of the image plot (y-axis)."""
-        set_plot_wavelength_range(self.plotItem, self.spatial_pixels, min_val, max_val, axis='y')
+        """Updates the spatial (x pixel) axis range of the image plot."""
+        config = self.data_model.config
+        axis = 'x' if config.x_data_dim == 1 else 'y'
+        spatial_indices = self.data_model.get_index_array(1)
+        set_plot_wavelength_range(self.plotItem, spatial_indices, min_val, max_val, axis=axis)
 
     def reset_spatial_range(self):
-        """Resets the spatial (x pixel) axis range of the image plot (y-axis) to full range."""
-        reset_plot_wavelength_range(self.plotItem, self.spatial_pixels, axis='y')
+        """Resets the spatial (x pixel) axis range to the initial maximum range."""
+        config = self.data_model.config
+        axis = 'x' if config.x_data_dim == 1 else 'y'
+        spatial_indices = self.data_model.get_index_array(1)
+        reset_plot_wavelength_range(self.plotItem, spatial_indices, axis=axis)
 
-    def updateExternalVLine(self, xpos_wl: float): 
+    def updateExternalVLine(self, spectral_pos: float): 
         if not self.crosshair_locked:
-            self.vLine.setPos(xpos_wl)
-            current_y_spatial = self.hLine.value() 
-            self.last_valid_crosshair_pos = (xpos_wl, current_y_spatial)
-            self.updateLabelFromCrosshair(xpos_wl, current_y_spatial)
+            config = self.data_model.config
+            if config.x_data_dim == 0:  # spectral on x-axis
+                self.vLine.setPos(spectral_pos)
+                current_y = self.hLine.value()
+                self.last_valid_crosshair_pos = (spectral_pos, current_y)
+                self.updateLabelFromCrosshair(spectral_pos, current_y)
+            else:  # spectral on y-axis
+                self.hLine.setPos(spectral_pos)
+                current_x = self.vLine.value()
+                self.last_valid_crosshair_pos = (current_x, spectral_pos)
+                self.updateLabelFromCrosshair(current_x, spectral_pos)
 
     @QtCore.pyqtSlot(float, float)
-    def set_crosshair_position(self, xpos_wl: float, ypos_spatial_x: float): 
+    def set_crosshair_position(self, spectral_pos: float, spatial_pos: float): 
         if not self.crosshair_locked:
-            self.vLine.setPos(xpos_wl)
-            self.hLine.setPos(ypos_spatial_x)
-            self.updateLabelFromCrosshair(xpos_wl, ypos_spatial_x)
-            self.last_valid_crosshair_pos = (xpos_wl, ypos_spatial_x)
+            # Convert spectral/spatial to plot x/y based on axis configuration
+            config = self.data_model.config
+            if config.x_data_dim == 0:  # spectral on x-axis
+                xpos, ypos = spectral_pos, spatial_pos
+            else:  # spatial on x-axis
+                xpos, ypos = spatial_pos, spectral_pos
+            
+            self.vLine.setPos(xpos)
+            self.hLine.setPos(ypos)
+            self.updateLabelFromCrosshair(xpos, ypos)
+            self.last_valid_crosshair_pos = (xpos, ypos)
     
     @QtCore.pyqtSlot(float)
-    def update_horizontal_crosshair(self, ypos_spatial_x: float):
+    def update_horizontal_crosshair(self, spatial_pos: float):
         """Update only the horizontal crosshair line from spatial window."""
         if not self.crosshair_locked:
-            self.hLine.blockSignals(True)  # Prevent feedback loop
-            self.hLine.setPos(ypos_spatial_x)
-            self.hLine.blockSignals(False)
+            config = self.data_model.config
+            if config.x_data_dim == 0:  # spectral on x-axis, spatial on y-axis
+                self.hLine.setPos(spatial_pos)
+                current_x = self.vLine.value()
+                self.last_valid_crosshair_pos = (current_x, spatial_pos)
+                self.updateLabelFromCrosshair(current_x, spatial_pos)
+            else:  # spatial on x-axis, spectral on y-axis
+                self.vLine.setPos(spatial_pos)
+                current_y = self.hLine.value()
+                self.last_valid_crosshair_pos = (spatial_pos, current_y)
+                self.updateLabelFromCrosshair(spatial_pos, current_y)
             # Update label with current crosshair position
             if self.last_valid_crosshair_pos:
-                self.updateLabelFromCrosshair(self.last_valid_crosshair_pos[0], ypos_spatial_x)
-                self.last_valid_crosshair_pos = (self.last_valid_crosshair_pos[0], ypos_spatial_x)
+                self.updateLabelFromCrosshair(self.last_valid_crosshair_pos[0], self.last_valid_crosshair_pos[1])
     
     @QtCore.pyqtSlot(float, float, int)
-    def update_crosshair_from_sync(self, xpos_wl: float, ypos_spatial_x: float, source_stokes_index: int):
+    def update_crosshair_from_sync(self, spectral_pos: float, spatial_pos: float, source_stokes_index: int):
         """Update crosshair position from synchronization with other states."""
         if not self.crosshair_locked and source_stokes_index != self.stokes_index:
+            # Convert spectral/spatial to plot x/y based on axis configuration
+            config = self.data_model.config
+            if config.x_data_dim == 0:  # spectral on x-axis
+                xpos, ypos = spectral_pos, spatial_pos
+            else:  # spatial on x-axis
+                xpos, ypos = spatial_pos, spectral_pos
+            
             # Block signals to prevent feedback loops
             self.vLine.blockSignals(True)
             self.hLine.blockSignals(True)
             
             # Update crosshair positions
-            self.vLine.setPos(xpos_wl)
-            self.hLine.setPos(ypos_spatial_x)
+            self.vLine.setPos(xpos)
+            self.hLine.setPos(ypos)
             
             # Update label and store position
-            self.last_valid_crosshair_pos = (xpos_wl, ypos_spatial_x)
-            self.updateLabelFromCrosshair(xpos_wl, ypos_spatial_x)
+            self.last_valid_crosshair_pos = (xpos, ypos)
+            self.updateLabelFromCrosshair(xpos, ypos)
             
             # Re-enable signals
             self.vLine.blockSignals(False)
@@ -924,19 +1068,32 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.spectral_pixels = np.arange(self.n_spectral)
         self.spatial_pixels = np.arange(self.n_x_pixel)
 
-        # Update histogram/image
+        # Update histogram/image - handle axis configuration
+        config = self.data_model.config
         axis_order = pg.getConfigOption('imageAxisOrder')
-        if axis_order == 'row-major':
-            img = self.data.T
+        
+        if config.x_data_dim == 0 and config.y_data_dim == 1:
+            # Default: spectral on x, spatial on y
+            img = self.data.T if axis_order == 'row-major' else self.data
         else:
-            img = self.data
+            # Swapped: spatial on x, spectral on y
+            img = self.data if axis_order == 'row-major' else self.data.T
+        
         self.image_item.setImage(img)
 
-        x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
-        x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral
-        y_min_x = self.spatial_pixels[0] if self.spatial_pixels.size > 0 else 0
-        y_max_x = self.spatial_pixels[-1] if self.spatial_pixels.size > 0 else self.n_x_pixel
-        self.image_item.setRect(x_min_spectral, y_min_x, x_max_spectral - x_min_spectral, y_max_x - y_min_x)
+        # Set image rectangle based on which dimension is on which axis
+        if config.x_data_dim == 0:
+            # Spectral on x-axis, spatial on y-axis (default)
+            x_min, x_max = 0, self.n_spectral - 1
+            y_min, y_max = 0, self.n_x_pixel - 1
+        else:
+            # Spatial on x-axis, spectral on y-axis (swapped)
+            x_min, x_max = 0, self.n_x_pixel - 1
+            y_min, y_max = 0, self.n_spectral - 1
+
+        width = x_max - x_min
+        height = y_max - y_min
+        self.image_item.setRect(x_min, y_min, width, height)
 
         # Update managers/clamps
         if hasattr(self, 'spectral_manager'):
@@ -944,10 +1101,20 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         if hasattr(self, 'spatial_manager'):
             self.spatial_manager.set_data_range(self.n_x_pixel)
 
-        # Clamp view and crosshair to new bounds
+        # Clamp view and crosshair to new bounds - respect axis configuration
+        config = self.data_model.config
+        if config.x_data_dim == 0:
+            # Spectral on x-axis, spatial on y-axis (default)
+            x_max = self.n_spectral - 1
+            y_max = self.n_x_pixel - 1
+        else:
+            # Spatial on x-axis, spectral on y-axis (swapped)
+            x_max = self.n_x_pixel - 1
+            y_max = self.n_spectral - 1
+        
         try:
-            self.plotItem.setXRange(0, self.n_spectral - 1, padding=0)
-            self.plotItem.setYRange(0, self.n_x_pixel - 1, padding=0)
+            self.plotItem.setXRange(0, x_max, padding=0)
+            self.plotItem.setYRange(0, y_max, padding=0)
         except Exception:
             pass
 
@@ -1095,6 +1262,12 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
         self.plotItem.scene().sigMouseMoved.connect(self._on_mouse_moved)
         self.plotItem.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.crosshair_locked = False
+        
+        # Throttle crosshair updates for better performance
+        self._crosshair_update_timer = QtCore.QTimer()
+        self._crosshair_update_timer.setSingleShot(True)
+        self._crosshair_update_timer.timeout.connect(self._emit_crosshair_position)
+        self._pending_crosshair_pos = None
 
         mid_spectral = (self.n_spectral - 1) / 2
         mid_y = (self.n_y_pixel - 1) / 2
@@ -1128,7 +1301,18 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
             return
         x, y = cross
         self._update_label(x, y)
-        self.crosshairMoved.emit(x, y, self.stokes_index)
+        
+        # Throttle signal emission - store position and emit after delay
+        self._pending_crosshair_pos = (x, y)
+        if not self._crosshair_update_timer.isActive():
+            self._crosshair_update_timer.start(16)  # ~60 FPS max update rate
+    
+    def _emit_crosshair_position(self):
+        """Emit the pending crosshair position after throttle delay."""
+        if self._pending_crosshair_pos is not None:
+            x, y = self._pending_crosshair_pos
+            self.crosshairMoved.emit(x, y, self.stokes_index)
+            self._pending_crosshair_pos = None
 
     @QtCore.pyqtSlot(float, float)
     def set_crosshair_position(self, xpos_wl: float, ypos_y: float):
@@ -1309,6 +1493,12 @@ class StokesImageWindow(BasePlotWidget):
         self.plotItem.scene().sigMouseMoved.connect(self._on_mouse_moved)
         self.plotItem.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.crosshair_locked = False
+        
+        # Throttle crosshair updates for better performance
+        self._crosshair_update_timer = QtCore.QTimer()
+        self._crosshair_update_timer.setSingleShot(True)
+        self._crosshair_update_timer.timeout.connect(self._emit_crosshair_position)
+        self._pending_crosshair_pos = None
 
         # Initialize crosshair at image center
         mid_x = (self.n_x - 1) / 2
@@ -1342,7 +1532,18 @@ class StokesImageWindow(BasePlotWidget):
             if cross is not None:
                 x, y = cross
                 self._update_label(x, y)
-                self.crosshairMoved.emit(x, y, self.stokes_index)
+                
+                # Throttle signal emission - store position and emit after delay
+                self._pending_crosshair_pos = (x, y)
+                if not self._crosshair_update_timer.isActive():
+                    self._crosshair_update_timer.start(16)  # ~60 FPS max update rate
+    
+    def _emit_crosshair_position(self):
+        """Emit the pending crosshair position after throttle delay."""
+        if self._pending_crosshair_pos is not None:
+            x, y = self._pending_crosshair_pos
+            self.crosshairMoved.emit(x, y, self.stokes_index)
+            self._pending_crosshair_pos = None
 
     # Public API
     @QtCore.pyqtSlot(int)

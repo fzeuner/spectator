@@ -18,6 +18,7 @@ from ...views.windows import (
     StokesImageWindow, AverageSpectrumWindow, StokesSpatialYWindow,
     StokesSpectrumYImageWindow
 )
+from ...models import AxisConfigs
 
 
 def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[str] = None, scale_info: Dict[str, Any] = None):
@@ -74,15 +75,15 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         base_name = STOKES_NAMES[i]
         # For each state, we will display a spectrum image (spectral vs spatial_x) at a given spatial_y index.
         state_data = data[i]
-        # Shapes: spatial_y, spectral, spatial_x
+        # Shapes: spectral, spatial_y, spatial_x (after rearrangement)
         if state_data.ndim != 3:
-            raise ValueError(f"scan_viewer expects per-state 3D data (y, spectral, x); got shape {state_data.shape}")
+            raise ValueError(f"scan_viewer expects per-state 3D data (spectral, y, x); got shape {state_data.shape}")
 
-        stokes_data_wl_x = state_data[0, :, :]  # (spectral, x)
+        stokes_data_wl_x = state_data[:, 0, :]  # (spectral, x) - slice at y=0
         initial_spec_y = state_data[:, :, 0].T if state_data.shape[2] > 0 else np.zeros((stokes_data_wl_x.shape[0], state_data.shape[0]))
 
-        # Windows
-        win_image_spectrum_x = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info)
+        # Windows - use swapped config so x is on x-axis, spectral on y-axis (matches scan window)
+        win_image_spectrum_x = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info, config=AxisConfigs.spectrum_image_window_swapped())
         
         win_image_spectrum_y = StokesSpectrumYImageWindow(initial_spec_y, stokes_index=i, name=base_name, scale_info=scale_info)
         win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
@@ -293,6 +294,11 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
             image_spectra_x[i].spatialAvgRegionChanged.connect(spectra[i].handle_spatial_avg_line_movement)
         if i < len(spatial_x):
             image_spectra_x[i].avgRegionChanged.connect(spatial_x[i].handle_spectral_avg_line_movement)
+            # Connect spectrum image crosshair to spatial window's orange line
+            # crosshairMoved emits (spectral_pos, spatial_pos) for swapped config
+            image_spectra_x[i].crosshairMoved.connect(
+                lambda spectral_pos, spatial_pos, idx=i: spatial_x[idx].update_x_line(spatial_pos) if idx < len(spatial_x) else None
+            )
         image_spectra_x[i].spatialAvgRegionChanged.connect(control_widget.handle_spatial_avg_line_movement)
 
         control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra_x[i].set_spectral_averaging_enabled)
@@ -332,6 +338,22 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
 
         if i < len(spatial_y):
             image_spectra_x[i].crosshairMoved.connect(spatial_y[i].update_from_spectrum_image_crosshair)
+
+    # Connect spectrum-image Y crosshair to spatial Y window (analogous to X connections above)
+    for i in range(len(image_spectra_y)):
+        if i < len(spatial_y):
+            # Connect spectrum image y crosshair to spatial y window's orange line
+            # crosshairMoved emits (spectral_pos, spatial_pos) - for y window, spatial_pos is y position
+            image_spectra_y[i].crosshairMoved.connect(
+                lambda spectral_pos, spatial_pos, idx=i: spatial_y[idx].update_y_line(spatial_pos) if idx < len(spatial_y) else None
+            )
+        
+        if i < len(spectra):
+            # Connect spectrum image y crosshair to spectrum window's orange line (spectral position)
+            # crosshairMoved emits (spectral_pos, spatial_pos)
+            image_spectra_y[i].crosshairMoved.connect(
+                lambda spectral_pos, spatial_pos, idx=i: spectra[idx].update_spectral_line(spectral_pos) if idx < len(spectra) else None
+            )
 
         if i < len(spectra):
             image_spectra_x[i].viewRangeChanged.connect(

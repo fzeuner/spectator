@@ -24,6 +24,8 @@ class SpectrumLimitControlGroup(BaseControlWidget):
                  spectrum_widget: 'StokesSpectrumWindow',
                  spectrum_image_widget: 'StokesSpectrumImageWindow',
                  spatial_widget: 'StokesSpatialWindow' = None,
+                 spatial_y_widget: 'StokesSpatialYWindow' = None,
+                 average_spectrum_widget: 'AverageSpectrumWindow' = None,
                  parent: Optional[QtWidgets.QWidget] = None):
         """
         Initialize spectrum limit control group.
@@ -32,7 +34,9 @@ class SpectrumLimitControlGroup(BaseControlWidget):
             stokes_name: Name of the Stokes parameter
             spectrum_widget: Associated spectrum plot widget
             spectrum_image_widget: Associated spectrum image widget
-            spatial_widget: Associated spatial plot widget
+            spatial_widget: Associated spatial plot widget (z on x-axis)
+            spatial_y_widget: Associated spatial Y plot widget (z on x-axis)
+            average_spectrum_widget: Associated average spectrum widget (z on y-axis)
             parent: Parent widget
         """
         super().__init__(f"{stokes_name}", parent)
@@ -41,6 +45,8 @@ class SpectrumLimitControlGroup(BaseControlWidget):
         self.spectrum_widget = spectrum_widget
         self.spectrum_image_widget = spectrum_image_widget
         self.spatial_widget = spatial_widget
+        self.spatial_y_widget = spatial_y_widget
+        self.average_spectrum_widget = average_spectrum_widget
         
         self._setup_controls()
         self._connect_signals()
@@ -55,20 +61,20 @@ class SpectrumLimitControlGroup(BaseControlWidget):
             callback=self._toggle_fix_spectrum_limits
         )
         
-        # Min/Max limit controls
+        # Min/Max limit controls - start as read-only but editable when checked
         self.min_limit_edit = self.add_line_edit(
             "Min:",
             initial_value="0.0",
             callback=self._on_limit_edit_changed
         )
-        self.min_limit_edit.setEnabled(False)
+        self.min_limit_edit.setReadOnly(True)
         
         self.max_limit_edit = self.add_line_edit(
             "Max:",
             initial_value="1.0", 
             callback=self._on_limit_edit_changed
         )
-        self.max_limit_edit.setEnabled(False)
+        self.max_limit_edit.setReadOnly(True)
     
     def _connect_signals(self):
         """Connect widget signals to handlers."""
@@ -90,27 +96,39 @@ class SpectrumLimitControlGroup(BaseControlWidget):
     def _toggle_fix_spectrum_limits(self, state: QtCore.Qt.CheckState):
         """Toggle fixed spectrum limits mode."""
         fixed = state == QtCore.Qt.CheckState.Checked
-        self.min_limit_edit.setEnabled(fixed)
-        self.max_limit_edit.setEnabled(fixed)
+        self.min_limit_edit.setReadOnly(not fixed)
+        self.max_limit_edit.setReadOnly(not fixed)
         
         if fixed:
             self._update_spectrum_limits_from_edits()  # Apply current values from edits
-            self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=False)
-            # Also disable auto-range for spatial window x-axis
+            # Disable auto-range for all windows with z-axis
+            if self.spectrum_widget:
+                self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=False)
             if self.spatial_widget:
                 self.spatial_widget.plotItem.enableAutoRange(axis='x', enable=False)
+            if self.spatial_y_widget:
+                self.spatial_y_widget.plotItem.enableAutoRange(axis='x', enable=False)
+            if self.average_spectrum_widget:
+                self.average_spectrum_widget.plotItem.enableAutoRange(axis='y', enable=False)
             
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 self.spectrum_image_widget.histogram.sigLevelsChanged.connect(
                     partial(self._on_histogram_levels_changed)
                 )
         else:
-            self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=True)
-            self.spectrum_widget.plotItem.autoRange()
-            # Re-enable auto-range for spatial window x-axis
+            # Re-enable auto-range for all windows with z-axis
+            if self.spectrum_widget:
+                self.spectrum_widget.plotItem.enableAutoRange(axis='y', enable=True)
+                self.spectrum_widget.plotItem.autoRange()
             if self.spatial_widget:
                 self.spatial_widget.plotItem.enableAutoRange(axis='x', enable=True)
                 self.spatial_widget.plotItem.autoRange()
+            if self.spatial_y_widget:
+                self.spatial_y_widget.plotItem.enableAutoRange(axis='x', enable=True)
+                self.spatial_y_widget.plotItem.autoRange()
+            if self.average_spectrum_widget:
+                self.average_spectrum_widget.plotItem.enableAutoRange(axis='y', enable=True)
+                self.average_spectrum_widget.plotItem.autoRange()
             
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 # Disconnect the signal
@@ -154,12 +172,15 @@ class SpectrumLimitControlGroup(BaseControlWidget):
                 self.min_limit_edit.blockSignals(False)
                 self.max_limit_edit.blockSignals(False)
                 
+                # Update all windows with z-axis
                 if self.spectrum_widget:
                     self.spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
-                
-                # Also update spatial window x-axis range
                 if self.spatial_widget:
                     self.spatial_widget.plotItem.setXRange(min_val, max_val, padding=0)
+                if self.spatial_y_widget:
+                    self.spatial_y_widget.plotItem.setXRange(min_val, max_val, padding=0)
+                if self.average_spectrum_widget:
+                    self.average_spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
     
     def _update_spectrum_limits_from_edits(self):
         """Apply manual z value limits to the spectrum plot and image histogram."""
@@ -170,12 +191,16 @@ class SpectrumLimitControlGroup(BaseControlWidget):
             if min_val >= max_val:
                 return  # Invalid range
             
-            if self.spectrum_widget:
-                self.spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
-            
-            # Also apply to spatial window x-axis when fix limits is enabled
-            if self.spatial_widget and self.fix_limits_checkbox.isChecked():
-                self.spatial_widget.plotItem.setXRange(min_val, max_val, padding=0)
+            # Apply to all windows with z-axis when fix limits is enabled
+            if self.fix_limits_checkbox.isChecked():
+                if self.spectrum_widget:
+                    self.spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
+                if self.spatial_widget:
+                    self.spatial_widget.plotItem.setXRange(min_val, max_val, padding=0)
+                if self.spatial_y_widget:
+                    self.spatial_y_widget.plotItem.setXRange(min_val, max_val, padding=0)
+                if self.average_spectrum_widget:
+                    self.average_spectrum_widget.plotItem.setYRange(min_val, max_val, padding=0)
             
             if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
                 self.spectrum_image_widget.histogram.setLevels(min_val, max_val)
