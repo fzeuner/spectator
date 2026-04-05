@@ -51,16 +51,16 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve_avg)
 
         colors = getWidgetColors()
-        # Use vertical line (angle=90) since x is now on x-axis
         config = self.data_model.config
-        line_angle = 90 if config.line_angle == 0 else 0  # config.line_angle=0 means vertical in our convention
+        
+        # Line angle: 0 (horizontal) for swapped coords, 90 (vertical) for normal
+        line_angle = 0 if config.swap_plot_coords else 90
         self.hLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), line_angle, moveable=True)
 
         self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_v', 'yellow'))
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
 
         # Use axis labels from config
-        config = self.data_model.config
         initialize_spectrum_plot_item(self.plotItem, y_label=config.y_label, y_units=config.y_units, 
                                       x_label=config.x_label, x_units=config.x_units)
         
