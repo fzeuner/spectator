@@ -6,6 +6,7 @@ parameters used throughout the application.
 """
 
 from typing import Dict, List
+from pyqtgraph.Qt import QtGui
 
 # Color definitions for crosshairs and UI elements (moved to color schemes)
 
@@ -31,6 +32,8 @@ HOVER_COLOR_DEFAULT = 'red'       # Default hover color for other moveable lines
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
 DEFAULT_LABEL_SIZE = '8pt'
+DEFAULT_TICK_FONT_SIZE = 8
+TICK_FONT = QtGui.QFont('Arial', DEFAULT_TICK_FONT_SIZE)
 
 # Viewer configuration
 SUPPORTED_VIEWER_TYPES = ['spectator', 'plot_1d', 'plot_2d', 'plot_4d', 'plot_5d']

@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import Tuple, Optional
 
-from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
+from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, TICK_FONT, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
 from .colors import getWidgetColors
 
 
@@ -244,7 +244,8 @@ def initialize_image_plot_item(item: pg.PlotItem,
     # Configure axis properties
     for axis_name in ['left', 'bottom', 'top']:
         axis = item.getAxis(axis_name)
-        axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
+        axis.enableAutoSIPrefix(False)
+        axis.setStyle(tickFont=TICK_FONT)
         if axis_name == 'left':
             axis.setWidth(30)
         else:  # 'bottom' and 'top'
@@ -281,7 +282,8 @@ def initialize_spectrum_plot_item(plot: pg.PlotItem,
     # Configure axis properties
     for axis_name in ['left', 'bottom', 'top']:
         axis = plot.getAxis(axis_name)
-        axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
+        axis.enableAutoSIPrefix(False)
+        axis.setStyle(tickFont=TICK_FONT)
         if axis_name == 'left':
             axis.setWidth(30)
         else:  # 'bottom' and 'top'
