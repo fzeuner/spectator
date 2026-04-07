@@ -5,8 +5,7 @@ This module contains all the constant values, color schemes, and configuration
 parameters used throughout the application.
 """
 
-from typing import Dict, List, Tuple
-import os
+from typing import Dict, List
 
 # Color definitions for crosshairs and UI elements (moved to color schemes)
 
@@ -32,13 +31,9 @@ HOVER_COLOR_DEFAULT = 'red'       # Default hover color for other moveable lines
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
 DEFAULT_LABEL_SIZE = '8pt'
-DEFAULT_TICK_FONT_SIZE = 8  # Font size for axis tick labels
 
-# Import QtGui for font object
-from pyqtgraph.Qt import QtGui
-TICK_FONT = QtGui.QFont('Arial', DEFAULT_TICK_FONT_SIZE)
-
-# Viewer / data limits
+# Viewer configuration
+SUPPORTED_VIEWER_TYPES = ['spectator', 'plot_1d', 'plot_2d', 'plot_4d', 'plot_5d']
 MAX_STATES = 8
 MAX_SPATIAL_AXES = 2
 
@@ -49,41 +44,8 @@ DEFAULT_DATA_TYPE = 'float64'
 
 # UI layout constants
 DEFAULT_DOCK_SIZE = (400, 300)
+DEFAULT_WINDOW_SIZE = (1200, 800)
 CONTROL_PANEL_SIZE = (130, 200)
-
-# Centralized window sizing configuration
-# You can control all viewer window sizes via these constants only
-DEFAULT_WINDOW_PERCENT = 0.75            # fraction of available screen size
-MIN_WINDOW_SIZE: Tuple[int, int] = (900, 600)
-DEFAULT_WINDOW_FALLBACK: Tuple[int, int] = (1200, 800)
-
-def get_initial_window_size(app, *,
-                            env_var: str = 'SPECTATOR_WINDOW',
-                            percent: float = DEFAULT_WINDOW_PERCENT,
-                            min_size: Tuple[int, int] = MIN_WINDOW_SIZE,
-                            fallback: Tuple[int, int] = DEFAULT_WINDOW_FALLBACK) -> Tuple[int, int]:
-    """
-    Compute an initial window size using a single centralized policy:
-    1) If env var like 'WIDTHxHEIGHT' is set, use it (e.g., 1200x800)
-    2) Else use a fraction of the primary screen's available geometry
-    3) Else fall back to DEFAULT_WINDOW_FALLBACK
-
-    Returns: (width, height)
-    """
-    try:
-        spec = os.environ.get(env_var, '').lower()
-        if 'x' in spec:
-            sw, sh = spec.split('x')[:2]
-            return int(sw), int(sh)
-        screen = getattr(app, 'primaryScreen', lambda: None)()
-        if screen is not None:
-            geo = screen.availableGeometry()
-            w = max(min_size[0], int(geo.width() * percent))
-            h = max(min_size[1], int(geo.height() * percent))
-            return w, h
-    except Exception:
-        pass
-    return fallback
 
 # Color scheme definitions
 class ColorSchemes:
@@ -161,16 +123,10 @@ __all__ = [
     'HOVER_COLOR_DEFAULT',
     'DEFAULT_FONT_SIZE',
     'DEFAULT_LABEL_SIZE',
-    'DEFAULT_TICK_FONT_SIZE',
-    'TICK_FONT',
+    'SUPPORTED_VIEWER_TYPES',
     'MAX_STATES',
     'MAX_SPATIAL_AXES',
-    'DEFAULT_DATA_TYPE',
     'ColorSchemes',
     'GrayPalette',
-    'BluePalette',
-    'DEFAULT_WINDOW_PERCENT',
-    'MIN_WINDOW_SIZE',
-    'DEFAULT_WINDOW_FALLBACK',
-    'get_initial_window_size'
+    'BluePalette'
 ]

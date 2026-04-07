@@ -10,7 +10,7 @@ from .constants import (
     MIN_LINE_DISTANCE,
     DEFAULT_N_STOKES, DEFAULT_N_WL, DEFAULT_N_X, 
     DEFAULT_LINE_WIDTH, ColorSchemes, GrayPalette, BluePalette,
-    MAX_STATES, MAX_SPATIAL_AXES
+    SUPPORTED_VIEWER_TYPES, MAX_STATES, MAX_SPATIAL_AXES
 )
 
 # Plotting utilities
@@ -24,7 +24,7 @@ from .plotting import (
 
 # Data utilities
 from .data_utils import (
-    generate_example_data_3d, generate_example_data_4d
+    generate_example_data, validate_data_array
 )
 
 # Color utilities
@@ -33,9 +33,9 @@ from .colors import getWidgetColors
 __all__ = [
     # Constants
     'MIN_LINE_DISTANCE',
-    'DEFAULT_N_STOKES', 'DEFAULT_N_WL', 'DEFAULT_N_X',
+    'DEFAULT_N_STOKES', 'DEFAULT_N_WL', 'DEFAULT_N_X', 'DEFAULT_WAVELENGTH_RANGE',
     'DEFAULT_LINE_WIDTH', 'ColorSchemes', 'GrayPalette', 'BluePalette',
-    'MAX_STATES', 'MAX_SPATIAL_AXES',
+    'SUPPORTED_VIEWER_TYPES', 'MAX_STATES', 'MAX_SPATIAL_AXES',
     
     # Plotting utilities
     'add_line', 'add_crosshair', 'create_histogram',
@@ -45,9 +45,11 @@ __all__ = [
     'create_y_limit_controls', 'apply_dark_theme', 'apply_light_theme',
     
     # Data utilities
-    'generate_example_data_3d', 'generate_example_data_4d',
+    'generate_example_data', 'validate_data_array', 'validate_data', 'normalize_data',
+    'calculate_statistics', 'resample_data', 'extract_spectral_line',
+    'apply_spectral_smoothing', 'detect_spectral_lines',
     
     # Color utilities
-    'getWidgetColors',
+    'getWidgetColors', 'get_crosshair_colors',
     
 ]

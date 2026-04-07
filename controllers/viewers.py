@@ -1,24 +1,28 @@
-"""
-3D Spectator viewer for (states, spectral, spatial_x) data.
-"""
-
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtWidgets
 import qdarkstyle
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
-from ...utils.constants import CONTROL_PANEL_SIZE, get_initial_window_size
-from ...utils.fixed_dock_label import FixedDockLabel
-from typing import List, Dict, Any
+from utils.constants import CONTROL_PANEL_SIZE
+from typing import List, Dict, Any 
+ 
 
-from ...views import PlotControlWidget
-from ...views.windows import (
+# local imports
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Note: Models import removed; unused in this controller
+from views import (
+    PlotControlWidget
+)
+from views.windows import (
     StokesSpectrumWindow, StokesSpectrumImageWindow, StokesSpatialWindow
 )
+ 
+# --- Main Application Setup for 3D data ---
 
-
-def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str] = None, scale_info: Dict[str, Any] = None):
+def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str] = None):
     """
     Main function to create and display the interactive data viewer.
 
@@ -26,7 +30,6 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         data: Numpy array of shape (N_Stokes, N_wl, N_x) containing Stokes data.
         title: Window title.
         state_names: List of names for the states (e.g., ['I', 'Q', 'U', 'V'])
-        scale_info: Dictionary with scaling information for display
     """  
     # Use existing QApplication if present, otherwise create one
     app = QtWidgets.QApplication.instance()
@@ -37,9 +40,23 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     win = QtWidgets.QMainWindow()
     area = DockArea()
     win.setCentralWidget(area)
-    # Centralized initial size
-    w, h = get_initial_window_size(app, env_var='SPECTATOR_WINDOW')
-    win.resize(w, h)
+    # Adaptive initial size: env override -> 80% of screen -> fallback
+    try:
+        spec_window = os.environ.get('SPECTATOR_WINDOW', '').lower()
+        if 'x' in spec_window:
+            sw, sh = spec_window.split('x')[:2]
+            w, h = int(sw), int(sh)
+        else:
+            screen = app.primaryScreen()
+            if screen is not None:
+                geo = screen.availableGeometry()
+                w = max(600, int(geo.width() * 0.8))
+                h = max(400, int(geo.height() * 0.8))
+            else:
+                w, h = 1280, 800
+        win.resize(w, h)
+    except Exception:
+        win.resize(1280, 800)
     win.setWindowTitle(title)
     
     # --- Generate state names ---
@@ -60,13 +77,15 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
     # --- Create Widgets and Docks in a Loop ---
     for i, name in enumerate(STOKES_NAMES):
-        base_name = name  # dock names
-        stokes_data_wl_x = data[i, :, :]  # Per-state 2D data: shape (wl, x)
+        base_name = name # dock names
+        stokes_data_y_wl_x = data[i, :, :] # Shape ( wl, x)
 
-        # Create Widgets for this Stokes parameter (all consume (wl, x))
-        win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
-        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info)
-        win_spatial = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        # Create Widgets for this Stokes parameter
+        initial_spec_img_data = data[i, :, :] 
+
+        win_spectrum = StokesSpectrumWindow(stokes_data_y_wl_x, stokes_index=i, name=base_name)
+        win_image_spectrum = StokesSpectrumImageWindow(initial_spec_img_data, stokes_index=i, name=base_name)
+        win_spatial = StokesSpatialWindow(initial_spec_img_data, stokes_index=i, name=base_name)
 
         # Append to lists
         spectra.append(win_spectrum)
@@ -77,28 +96,16 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         try:
             if hasattr(win_image_spectrum, 'hLine'):
                 x_pos = float(win_image_spectrum.hLine.value())
-                n_x = win_spectrum.data_model.get_dimension_size(1)
+                n_x = win_spectrum.full_data.shape[1]
                 x_idx = int(np.clip(np.round(x_pos), 0, n_x - 1))
                 win_spectrum.update_spectrum_data(x_idx)
         except Exception as e:
             print(f"Warning: could not initialize spectrum window from crosshair: {e}")
 
         # Create Docks (spectrum clearly wider than spatial)
-        spectrum_dock = Dock(
-            f"{base_name} spectrum",
-            size=(600, 260),
-            label=FixedDockLabel(f"{base_name} spectrum"),
-        )
-        spectrum_image_dock = Dock(
-            f"{base_name} spectrum image",
-            size=(800, 540),
-            label=FixedDockLabel(f"{base_name} spectrum image"),
-        )
-        spatial_dock = Dock(
-            f"{base_name} spatial",
-            size=(360, 240),
-            label=FixedDockLabel(f"{base_name} spatial"),
-        )
+        spectrum_dock = Dock(f"{base_name} spectrum", size=(600, 260))
+        spectrum_image_dock = Dock(f"{base_name} spectrum image", size=(800, 540))
+        spatial_dock = Dock(f"{base_name} spatial", size=(360, 240))
 
         # Add Widgets to Docks
         spectrum_dock.addWidget(win_spectrum)
@@ -114,16 +121,12 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     control_widget.init_spectrum_limit_controls(spectra, image_spectra, spatial) # Now initialize UI for limits
        
     # --- Create Control Dock ---
-    control_dock = Dock(
-        "Control",
-        size=(int(CONTROL_PANEL_SIZE[0] * 1.5), CONTROL_PANEL_SIZE[1]),
-        label=FixedDockLabel("Control"),
-    )
+    control_dock = Dock("Control", size=(int(CONTROL_PANEL_SIZE[0] * 1.5), CONTROL_PANEL_SIZE[1]))
     
     # --- Arrange Docks in the DockArea ---
     
     for i, name in enumerate(STOKES_NAMES):
-        base_name = name
+        base_name = name.split('/')[0]
         if name == STOKES_NAMES[0]: # first one always on the left
             area.addDock(docks["spec_img"][base_name], 'left')
         else:
@@ -132,7 +135,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     # Middle Column: Spectrum Images and Spectra
  
     for i, name in enumerate(STOKES_NAMES):
-         base_name = name
+         base_name = name.split('/')[0]
          # Add spectrum and spatial
          area.addDock(docks["spectrum"][base_name], 'right', docks["spec_img"][base_name])
          area.addDock(docks["spatial"][base_name], 'right', docks["spectrum"][base_name])
@@ -149,7 +152,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
     
     # --- Connect Signals in a Loop ---
 
-    for i in range(len(image_spectra)):
+    for i in range(len(image_spectra)):        
         image_spectra[i].crosshairMoved.connect(control_widget.handle_crosshair_movement)
         
         # Always forward avg movements so the local windows update regardless of sync state
@@ -259,7 +262,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
     # If we created the QApplication here, start the event loop; otherwise, return window for embedding
     if created_app:
-        app.exec()
+        app.exec_()
         return None
     else:
         return win

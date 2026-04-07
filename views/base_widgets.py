@@ -12,8 +12,13 @@ from typing import Optional
 import warnings
 
 # Import our models for configuration
-from ..models import get_default_crosshair_colors, get_default_averaging_colors, get_default_min_line_distance
-from ..utils.colors import getWidgetColors
+from models import get_default_crosshair_colors, get_default_averaging_colors, get_default_min_line_distance
+
+# Import existing functions for compatibility
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.colors import getWidgetColors
 
 
 class CustomVerticalLabel(PgVerticalLabel):

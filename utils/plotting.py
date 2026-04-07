@@ -10,26 +10,8 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import Tuple, Optional
 
-from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, TICK_FONT, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
+from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
 from .colors import getWidgetColors
-
-SOLID_LINE = QtCore.Qt.PenStyle.SolidLine
-DASH_LINE = QtCore.Qt.PenStyle.DashLine
-DOT_LINE = QtCore.Qt.PenStyle.DotLine
-
-
-ALIGN_CENTER = QtCore.Qt.AlignmentFlag.AlignCenter
-
-# Unicode superscript characters for exponent display
-_SUPERSCRIPT_MAP = {
-    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-    '-': '⁻', '+': '⁺'
-}
-
-def _to_superscript(num: int) -> str:
-    """Convert an integer to Unicode superscript characters."""
-    return ''.join(_SUPERSCRIPT_MAP.get(c, c) for c in str(num))
 
 
 def add_line(plot_item: pg.PlotItem, 
@@ -37,7 +19,7 @@ def add_line(plot_item: pg.PlotItem,
              angle: float, 
              moveable: bool = False, 
              pos: float = 0, 
-             style=SOLID_LINE,
+             style=QtCore.Qt.SolidLine,
              is_averaging_line: bool = False) -> pg.InfiniteLine:
     """
     Add an InfiniteLine to a PlotItem.
@@ -59,7 +41,7 @@ def add_line(plot_item: pg.PlotItem,
     
     # Set custom hover pen based on line type
     if moveable:
-        if is_averaging_line and style == SOLID_LINE:
+        if is_averaging_line and style == QtCore.Qt.SolidLine:
             # Orange hover for solid averaging lines only
             hover_pen = pg.mkPen(color=HOVER_COLOR_AVERAGING, width=DEFAULT_LINE_WIDTH + 1, style=style)
         else:
@@ -74,7 +56,7 @@ def add_line(plot_item: pg.PlotItem,
 def add_crosshair(plot_item: pg.PlotItem, 
                   v_color: str, 
                   h_color: str, 
-                  style=DASH_LINE) -> Tuple[pg.InfiniteLine, pg.InfiniteLine]:
+                  style=QtCore.Qt.DashLine) -> Tuple[pg.InfiniteLine, pg.InfiniteLine]:
     """
     Add a crosshair (vertical and horizontal InfiniteLine) to a PlotItem.
     
@@ -151,7 +133,7 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
             border-radius: 1px;
         }}
     """)
-    scale_label.setAlignment(ALIGN_CENTER)
+    scale_label.setAlignment(QtCore.Qt.AlignCenter)
     scale_label.setMaximumHeight(20)
     scale_label.setMinimumHeight(20)
     
@@ -190,11 +172,11 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
                         if factor == 1.0:
                             label_text = "1"
                         else:
-                            # Convert 1/factor to scientific notation label with superscript
+                            # Convert 1/factor to scientific notation label
                             inverse_factor = 1.0 / factor
                             exponent = int(np.log10(abs(inverse_factor))) if inverse_factor != 0 else 0
                             if exponent != 0:
-                                label_text = f"10{_to_superscript(exponent)}"
+                                label_text = f"10^{exponent}"
                             else:
                                 label_text = "1"
                     # If no scaling info for this state, label_text remains "1"
@@ -206,11 +188,11 @@ def create_histogram_with_scaling(image_item: pg.ImageItem,
                         if first_factor == 1.0:
                             label_text = "1"
                         else:
-                            # Convert 1/factor to scientific notation label with superscript
+                            # Convert 1/factor to scientific notation label
                             inverse_factor = 1.0 / first_factor
                             exponent = int(np.log10(abs(inverse_factor))) if inverse_factor != 0 else 0
                             if exponent != 0:
-                                label_text = f"10{_to_superscript(exponent)}"
+                                label_text = f"10^{exponent}"
                             else:
                                 label_text = "1"
  
@@ -263,7 +245,6 @@ def initialize_image_plot_item(item: pg.PlotItem,
     for axis_name in ['left', 'bottom', 'top']:
         axis = item.getAxis(axis_name)
         axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
-        axis.setStyle(tickFont=TICK_FONT)
         if axis_name == 'left':
             axis.setWidth(30)
         else:  # 'bottom' and 'top'
@@ -301,23 +282,15 @@ def initialize_spectrum_plot_item(plot: pg.PlotItem,
     for axis_name in ['left', 'bottom', 'top']:
         axis = plot.getAxis(axis_name)
         axis.enableAutoSIPrefix(False)  # Disable auto SI prefix for all relevant axes
-        axis.setStyle(tickFont=TICK_FONT)
         if axis_name == 'left':
             axis.setWidth(30)
         else:  # 'bottom' and 'top'
             axis.setHeight(15)
 
     plot.setLabel("bottom", text=x_label, units=x_units)
-    
-    # For spectrum/spatial plots: put y-label on right axis, tick numbers on left
-    if y_label:
-        plot.setLabel("right", text=y_label, units=y_units)
-        plot.getAxis('left').showLabel(False)
-        plot.getAxis('right').enableAutoSIPrefix(False)  # Disable SI prefix on right axis
-    else:
-        plot.setLabel("left", text=y_label, units=y_units)
+    plot.setLabel("left", text=y_label, units=y_units)
 
-    # Show axes with tick values on left and bottom
+    # Show axes with tick values on left and top only - no size parameter
     plot.showAxes(True, showValues=(True, True, False, False))
     
     # Set individual axis dimensions for precise control

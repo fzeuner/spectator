@@ -4,28 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectator"
-version = "0.2.0"
-description = "Visualization for spectropolarimetric data"
+version = "0.1.0"
+description = "Spectator visualization components"
 readme = "README.md"
-requires-python = ">=3.14"
-authors = [{ name = "Franziska Zeuner" }]
-license = "MIT"
-license-files = ["LICENSE"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Scientific/Engineering :: Astronomy",
-]
+requires-python = ">=3.12"
+authors = [{ name = "Franziska Zeuner", email = "noreply@example.com" }]
 dependencies = [
-    "numpy>=2.4.4",
-    "pyqt6>=6.9.0,<6.11.0",  # Use older version with broader platform support"
-    "pyqtgraph>=0.14.0",
-    "scipy>=1.17.1",
-    "pydantic>=2.0",
-    "qdarkstyle>=3.2.3",
+    "numpy==2.2.6",
+    "PyQt5==5.15.11",
+    "pyqtgraph==0.14.0",
+    "QDarkStyle==3.2.3",
+    "QtPy==2.4.3",
+    "scipy==1.15.2",
+    "colorama==0.4.6",
 ]
 
 [tool.setuptools]
@@ -34,13 +25,3 @@ package-dir = {"" = "."}
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["spectator*"]
-
-[project.urls]
-Repository = "https://github.com/fzeuner/spectator"
-Documentation = "https://github.com/fzeuner/spectator#readme"
-Issues = "https://github.com/fzeuner/spectator/issues"
-
-[dependency-groups]
-dev = [
-    "pytest>=7.0",
-]

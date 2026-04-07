@@ -7,7 +7,7 @@ and other plot interactions without code duplication.
 
 import numpy as np
 from typing import List, Optional, Callable, Any
-from pyqtgraph.Qt import QtCore
+from PyQt5 import QtCore
 
 
 class SynchronizationManager(QtCore.QObject):
@@ -68,7 +68,7 @@ class SynchronizationManager(QtCore.QObject):
             return
             
         source_spectrum_widget = self.spectra_widgets[source_index]
-        n_x_pixel = source_spectrum_widget.data_model.get_dimension_size(1)
+        n_x_pixel = source_spectrum_widget.full_data.shape[1]
         index_x = self._convert_to_index(ypos, n_x_pixel)
         
         if sync_enabled:
@@ -113,7 +113,7 @@ class SynchronizationManager(QtCore.QObject):
                     self._sync_image_widgets_crosshair(xpos, ypos, src_idx)
                     if self.spectra_widgets and src_idx < len(self.spectra_widgets):
                         source_spectrum_widget = self.spectra_widgets[src_idx]
-                        n_x_pixel = source_spectrum_widget.data_model.get_dimension_size(1)
+                        n_x_pixel = source_spectrum_widget.full_data.shape[1]
                         index_x = self._convert_to_index(ypos, n_x_pixel)
                         self._sync_spectrum_widgets_crosshair(xpos, index_x, src_idx)
                     self._sync_spatial_widgets_crosshair(xpos, ypos, src_idx)
@@ -128,7 +128,7 @@ class SynchronizationManager(QtCore.QObject):
             if sp_idx < len(self.spectrum_image_widgets):
                 img_widget = self.spectrum_image_widgets[sp_idx]
                 if self._has_spectral_lines(img_widget):
-                    n_wl_pixel = sp_widget.data_model.get_dimension_size(0)
+                    n_wl_pixel = sp_widget.full_data.shape[0]
                     index_wl_l = self._convert_to_index(left_pos, n_wl_pixel)
                     index_wl_c = self._convert_to_index(center_pos, n_wl_pixel)
                     index_wl_h = self._convert_to_index(right_pos, n_wl_pixel)
@@ -152,15 +152,9 @@ class SynchronizationManager(QtCore.QObject):
         for img_idx, img_widget in enumerate(self.spectrum_image_widgets):
             if img_idx == source_index:
                 if not img_widget.crosshair_locked:
-                    # Block signals to prevent feedback during sync
-                    img_widget.blockSignals(True)
                     img_widget.set_crosshair_position(xpos, ypos)
-                    img_widget.blockSignals(False)
             elif not img_widget.crosshair_locked:
-                # Block signals to prevent feedback during sync
-                img_widget.blockSignals(True)
                 img_widget.set_crosshair_position(xpos, ypos)
-                img_widget.blockSignals(False)
     
     def _sync_spectrum_widgets_crosshair(self, xpos: float, index_x: int, source_index: int):
         """Sync crosshair across spectrum widgets."""
@@ -194,7 +188,7 @@ class SynchronizationManager(QtCore.QObject):
     def _update_spatial_widget_crosshair(self, spatial_widget: Any, xpos: float, ypos: float):
         """Update a single spatial widget's crosshair and data."""
         spatial_widget.update_x_line(ypos)
-        spectral_idx = self._convert_to_index(xpos, spatial_widget.data_model.get_dimension_size(0))
+        spectral_idx = self._convert_to_index(xpos, spatial_widget.full_data.shape[0])
         spatial_widget.update_spatial_data_spectral(spectral_idx)
     
     def _broadcast_spectral_positions(self):

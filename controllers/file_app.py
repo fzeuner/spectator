@@ -9,10 +9,8 @@ from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import qdarkstyle
 from pyqtgraph.dockarea import DockArea, Dock
 from .file_controllers import FileListingController, FileLoadingController
-from ..utils.info_formatter import format_info_to_html
-from ..utils.colors import getWidgetColors
-from ..utils.fixed_dock_label import FixedDockLabel
-from ..config.viewer_config import DEFAULT_AXIS_ORDERS
+from utils.info_formatter import format_info_to_html
+from utils.colors import getWidgetColors
 
 
 class FileBrowserApp(QtWidgets.QMainWindow):
@@ -35,12 +33,7 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.setCentralWidget(self.dock_area)
 
         # Files dock (narrow)
-        self.files_dock = Dock(
-            "Files",
-            closable=False,
-            size=(1, 1),
-            label=FixedDockLabel("Files"),
-        )  # relative size
+        self.files_dock = Dock("Files", closable=False, size=(1, 1))  # relative size
         files_container = QtWidgets.QWidget()
         files_layout = QtWidgets.QVBoxLayout(files_container)
         files_layout.setContentsMargins(8, 8, 8, 8)
@@ -51,12 +44,7 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.files_dock.addWidget(files_container)
 
         # Info dock (wide)
-        self.info_dock = Dock(
-            "Info",
-            closable=False,
-            size=(3, 1),
-            label=FixedDockLabel("Info"),
-        )  # wider than Files
+        self.info_dock = Dock("Info", closable=False, size=(3, 1))  # wider than Files
         info_container = QtWidgets.QWidget()
         info_layout = QtWidgets.QVBoxLayout(info_container)
         info_layout.setContentsMargins(8, 8, 8, 8)
@@ -69,12 +57,7 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         self.info_dock.addWidget(info_container)
 
         # Observer log dock (stacked with Info using pyqtgraph Dock tabs)
-        self.observer_log_dock = Dock(
-            "Observer log",
-            closable=False,
-            size=(3, 1),
-            label=FixedDockLabel("Observer log"),
-        )
+        self.observer_log_dock = Dock("Observer log", closable=False, size=(3, 1))
         observer_container = QtWidgets.QWidget()
         observer_layout = QtWidgets.QVBoxLayout(observer_container)
         observer_layout.setContentsMargins(8, 8, 8, 8)
@@ -166,11 +149,14 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         try:
             shape = getattr(data, 'shape', None)
             if isinstance(shape, tuple):
-                ndim = len(shape)
-                try:
-                    labels = list(DEFAULT_AXIS_ORDERS[ndim])
-                except KeyError:
-                    labels = [f"dim{i}" for i in range(ndim)]
+                if len(shape) == 3:
+                    labels = ['states', 'spectral', 'spatial']
+                elif len(shape) == 2:
+                    labels = ['spectral', 'spatial']
+                elif len(shape) == 1:
+                    labels = ['spectral']
+                else:
+                    labels = [f"dim{i}" for i in range(len(shape))]
                 dims_str = ", ".join(f"{label}={shape[i]}" for i, label in enumerate(labels))
                 print(f"Loaded array dims: {dims_str}")
         except Exception:
@@ -365,4 +351,4 @@ def run():
         print(f"Could not apply qdarkstyle: {e}")
     w = FileBrowserApp()
     w.show()
-    return app.exec()
+    return app.exec_()

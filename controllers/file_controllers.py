@@ -7,14 +7,17 @@ This module handles the connection between file selection and data loading/displ
 import numpy as np
 from typing import List, Dict, Any
 from pyqtgraph.Qt import QtCore, QtWidgets
+
+# Import local modules
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..models.file_model import datReader
-from .app_controller import data_manager
-from .app_controller import display_data
-from ..config.viewer_config import DEFAULT_AXIS_ORDERS
+from models.file_model import datReader
+from controllers.app_controller import data_manager
+from controllers.app_controller import display_data
 
-from ..utils.config import load_config, ensure_example_config
+from utils.config import load_config, ensure_example_config
 
 
 class FileLoadingController(QtCore.QObject):
@@ -87,14 +90,14 @@ class FileLoadingController(QtCore.QObject):
             
             # Import here to avoid circular imports
             from .app_controller import data_manager
-            from ..models.axis_types import AxisType
+            from models.data_model import AxisType
             
             # Use data manager's rearrange functionality directly
             # The data comes as (states, spatial, spectral) 
             # The StokesSpectrumImageWindow expects (spectral, spatial) per state and transposes internally
             # So we need (states, spectral, spatial) format
-            input_axes = [AxisType.STATES, AxisType.SPATIAL_X, AxisType.SPECTRAL]
-            target_axes = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL_X]
+            input_axes = [AxisType.STATES, AxisType.SPATIAL, AxisType.SPECTRAL]
+            target_axes = [AxisType.STATES, AxisType.SPECTRAL, AxisType.SPATIAL]
             
             processed_data = data_manager.rearranger.rearrange_data(
                 raw_data_array,
@@ -135,26 +138,26 @@ class FileLoadingController(QtCore.QObject):
             # Get the filename for the title
             filename = getattr(self, '_current_filename', 'Unknown')
             
-            # Determine axis order based on data shape using central config
-            ndim = len(data.shape)
-            try:
-                axis_order = list(DEFAULT_AXIS_ORDERS[ndim])
-            except KeyError:
-                raise ValueError(f"Unsupported data shape for viewer auto-selection: {data.shape}")
-
-            # For 2D data there is no states axis -> ignore provided state_names
-            if ndim == 2:
-                state_names = None
-
+            # Determine axes based on data shape
+            if len(data.shape) == 3:
+                # 3D data: assume (states, spectral, spatial)
+                axes = ('states', 'spectral', 'spatial')
+            elif len(data.shape) == 2:
+                # 2D data: assume (spectral, spatial)
+                axes = ('spectral', 'spatial')
+                state_names = None  # No states for 2D data
+            else:
+                raise ValueError(f"Unsupported data shape: {data.shape}")
+            
             # Create title with filename
             title = f"Spectator - {filename}"
-
-            # Use the public helper to display the data with explicit axis order
+            
+            # Use the data manager to display the data
             viewer = display_data(
-                data,
-                order=axis_order,
-                title=title,
-                state_names=state_names,
+                data, 
+                *axes, 
+                title=title, 
+                state_names=state_names
             )
             
             return viewer
@@ -270,16 +273,16 @@ class FileListingController(QtWidgets.QWidget):
         layout.addWidget(self.listWidget)
         # Place toggle buttons above the other buttons
         toggles_row = QtWidgets.QHBoxLayout()
-        self.display_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
-        self.always_new_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.display_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.always_new_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         toggles_row.addWidget(self.display_button, 1)
         toggles_row.addWidget(self.always_new_button, 1)
         layout.addLayout(toggles_row)
         # Buttons row (Choose + Refresh) – make them share full width equally
         buttons_row = QtWidgets.QHBoxLayout()
         # Make buttons expand equally to fill the row
-        self.button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
-        self.refresh_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.refresh_button.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         buttons_row.addWidget(self.button, 1)
         buttons_row.addWidget(self.refresh_button, 1)
         layout.addLayout(buttons_row)
@@ -339,9 +342,8 @@ class FileListingController(QtWidgets.QWidget):
         """Handle directory selection and populate file list."""
         dialog = QtWidgets.QFileDialog(self)
         dialog.setWindowTitle('Choose a directory')
-        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
-        dialog.setFileMode(QtWidgets.QFileDialog.FileMode.Directory)
-        dialog.setOption(QtWidgets.QFileDialog.Option.ShowDirsOnly, True)
+        dialog.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+        dialog.setFileMode(QtWidgets.QFileDialog.DirectoryOnly)
         # Set starting directory, preferring the current directory over config
         import os
         start_dir = ''
@@ -364,13 +366,11 @@ class FileListingController(QtWidgets.QWidget):
             except Exception:
                 pass
         
-        for view in dialog.findChildren(QtWidgets.QTreeView):
-            try:
-                view.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
-            except Exception:
-                pass
+        for view in dialog.findChildren((QtWidgets.QListView, QtWidgets.QTreeView)):
+            if isinstance(view.model(), QtWidgets.QFileSystemModel):
+                view.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         
-        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
             selected = dialog.selectedFiles()
             # If user chose the base (parent) directory, do NOT list files; show its subdirectories
             base = selected[0] if selected else self.directory[0]
@@ -454,7 +454,7 @@ class FileListingController(QtWidgets.QWidget):
                 # Disable selection for info items
                 for i in range(self.listWidget.count()):
                     item = self.listWidget.item(i)
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
                 return
 
             # List immediate subdirectories
@@ -490,7 +490,7 @@ class FileListingController(QtWidgets.QWidget):
                 self.listWidget.addItem("No subdirectories found.")
                 for i in range(self.listWidget.count()):
                     item = self.listWidget.item(i)
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
                 self.directorylabel.setText(base_dir)
         except Exception:
             # Non-fatal UI population errors should not crash the app
