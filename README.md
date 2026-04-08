@@ -7,9 +7,9 @@ A Python-based visualization tool for multi-dimensional spectropolarimetric data
 
 ## Installation
 
-### End Users (Recommended)
+### End Users
 
-For users who just want to install the package:
+For users who just want to install the package and use it programmatically:
 
 ```bash
 # Install from GitHub with pip (not yet on PyPI)
@@ -21,6 +21,52 @@ uv add git+https://github.com/fzeuner/spectator.git
 ```
 
 Requirements: Python 3.14+
+
+### z3showred Users
+
+Follow below instructions to install z3showred - in case you want to install it on saturn/old instrument PCs, follow instructions on the branch os-old!
+
+#### 1. Install uv
+
+Follow the official guide: https://docs.astral.sh/uv/getting-started/installation/
+
+#### 2. Clone and set up
+
+```bash
+git clone https://github.com/fzeuner/spectator.git ~/spectator
+cd ~/spectator
+uv sync
+```
+
+### 3. Configure data path
+
+Copy the example config and point it to your data folder:
+
+```bash
+mkdir -p ~/.config/spectator
+cp ~/spectator/config/file_config.json ~/.config/spectator/file_config.json
+```
+
+Then edit `~/.config/spectator/file_config.json` and set `default_data_base_dir` to your data root:
+
+```json
+{
+  "default_data_base_dir": "/path/to/your/data"
+}
+```
+
+### 4. Add alias
+
+```bash
+echo "alias z3showred='cd ~/spectator && ./z3showred.sh'" >> ~/.bashrc
+source ~/.bashrc
+```
+
+Then simply run:
+
+```bash
+z3showred
+```
 
 ### Developers
 
