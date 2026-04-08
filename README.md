@@ -38,7 +38,7 @@ cd ~/spectator
 uv sync
 ```
 
-### 3. Configure data path
+#### 3. Configure data path
 
 Copy the example config and point it to your data folder:
 
@@ -55,7 +55,7 @@ Then edit `~/.config/spectator/file_config.json` and set `default_data_base_dir`
 }
 ```
 
-### 4. Add alias
+#### 4. Add alias
 
 ```bash
 echo "alias z3showred='cd ~/spectator && ./z3showred.sh'" >> ~/.bashrc
