@@ -25,7 +25,7 @@ uv sync
 Two files in `utils/` replace pyqtgraph internals. Create symlinks into the `.venv`:
 
 ```bash
-SITE=~/spectator/.venv/lib/python3.12/site-packages
+SITE=~/spectator/.venv/lib/python3.10/site-packages
 
 ln -sf ~/spectator/utils/Dock.py         $SITE/pyqtgraph/dockarea/Dock.py
 ln -sf ~/spectator/utils/VerticalLabel.py $SITE/pyqtgraph/widgets/VerticalLabel.py

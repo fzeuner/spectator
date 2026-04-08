@@ -1,27 +1,14 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "spectator"
 version = "0.1.0"
-description = "Spectator visualization components"
+description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
-authors = [{ name = "Franziska Zeuner", email = "noreply@example.com" }]
+requires-python = ">=3.10"
 dependencies = [
-    "numpy==2.2.6",
-    "PyQt5==5.15.11",
-    "pyqtgraph==0.14.0",
-    "QDarkStyle==3.2.3",
-    "QtPy==2.4.3",
-    "scipy==1.15.2",
-    "colorama==0.4.6",
+    "colorama>=0.4.6",
+    "numpy>=2.2.6",
+    "pyqt5>=5.15.11",
+    "pyqtgraph>=0.14.0",
+    "qdarkstyle>=3.2.3",
+    "scipy>=1.15.3",
 ]
-
-[tool.setuptools]
-package-dir = {"" = "."}
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["spectator*"]
