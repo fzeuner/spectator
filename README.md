@@ -46,16 +46,7 @@ uv sync
 
 #### Old OS / instrument PCs
 
-For OS systems where PyQt6 cannot be installed (e.g. saturn, old instrument PCs), use the `os-old` branch which is based on PyQt5. Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
-
-```bash
-git clone https://github.com/fzeuner/spectator.git ~/spectator
-cd ~/spectator
-git checkout os-old
-uv sync
-```
-
-See the `os-old` branch README for the additional symlink setup steps.
+For OS systems where PyQt6 cannot be installed (e.g. saturn, old instrument PCs), use the `os-old` branch which is based on PyQt5, see the `os-old` branch README for the installation and additional symlink setup steps.
 
 #### Configuration
 
