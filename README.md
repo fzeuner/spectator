@@ -12,6 +12,9 @@ spectropolarimetric data - designed to replace IDL Z3showred.
 - [Installation](#installation)
   - [End users](#end-users)
   - [z3showred](#z3showred)
+    - [Modern systems](#modern-systems)
+    - [Old OS / instrument PCs](#old-os--instrument-pcs)
+    - [Configuration](#configuration)
   - [Developers](#developers)
 - [Usage](#usage)
 - [Acknowledgments](#acknowledgments)
@@ -41,26 +44,7 @@ cd ~/spectator
 uv sync
 ```
 
-**Configure data path:**
-
-```bash
-mkdir -p ~/.config/spectator
-cp ~/spectator/config/file_config.json ~/.config/spectator/file_config.json
-# Edit the file and set "default_data_base_dir" to your data root
-```
-
-**Add shell alias:**
-
-```bash
-echo "alias z3showred='cd ~/spectator && ./z3showred.sh'" >> ~/.bashrc
-source ~/.bashrc
-```
-
-Then simply run `z3showred`.
-
-![File browser](docs/z3showred.png)
-
-### Old OS / instrument PCs
+#### Old OS / instrument PCs
 
 For OS systems where PyQt6 cannot be installed (e.g. saturn, old instrument PCs), use the `os-old` branch which is based on PyQt5. Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
@@ -94,6 +78,25 @@ The file browser reads `~/.config/spectator/file_config.json` (user-local, takes
 | `excluded_file_terms` | Skip files whose name contains any of these terms |
 
 ---
+
+**Configure data path:**
+
+```bash
+mkdir -p ~/.config/spectator
+cp ~/spectator/config/file_config.json ~/.config/spectator/file_config.json
+# Edit the file and set "default_data_base_dir" to your data root
+```
+
+**Add shell alias:**
+
+```bash
+echo "alias z3showred='cd ~/spectator && ./z3showred.sh'" >> ~/.bashrc
+source ~/.bashrc
+```
+
+Then simply run `z3showred`.
+
+![File browser](docs/z3showred.png)
 
 ### Developers
 
