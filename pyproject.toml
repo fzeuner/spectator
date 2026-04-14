@@ -9,7 +9,7 @@ description = "Visualization for spectropolarimetric data"
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "Franziska Zeuner" }]
-license = "MIT"
+license = "GPL-3.0"
 license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 4 - Beta",
