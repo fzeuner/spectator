@@ -593,41 +593,41 @@ class FileListingController(QtWidgets.QWidget):
 
         
     def all_dat_files(self, directories, excludes=None, in_dir=None):
-        """Find all .dat files in the specified directories."""
+        """Find all .dat files in the specified directories.
+        
+        If in_dir is specified, files in that subdirectory are preferred,
+        but files in the parent directory are also included as fallback.
+        """
         if excludes is None:
             excludes = []
         if in_dir is None:
             in_dir = self.must_be_in_directory
             
-        # Quiet operation: no debug printing
-        
         list_of_files = []
         list_of_directories = []
-        total_sav_files = 0
         
-        for root, dirs, files in os.walk(directories[0]):       
+        # First pass: collect all candidate files with their preference level
+        candidates = []  # (root, file, is_preferred)
+        
+        for root, dirs, files in os.walk(directories[0]):
             dat_files_in_dir = [f for f in files if f.endswith('.dat')]
-            if dat_files_in_dir:
-                total_sav_files += len(dat_files_in_dir)
+            for file in dat_files_in_dir:
+                # Check exclusions first
+                excluded = any(exclude in file for exclude in excludes)
+                if excluded:
+                    continue
                 
-                for file in dat_files_in_dir:
-                    # Check directory requirement
-                    if in_dir in root:
-                        
-                        # Check exclusions
-                        use = True
-                        for exclude in excludes:
-                            if exclude in file:
-                                use = False
-                                break
-                        
-                        if use:
-                            list_of_files.append(file)
-                            list_of_directories.append(root)
-                        else:
-                            pass
-                    else:
-                        pass
-        # No summary prints
+                # Determine if this is a preferred location (in_dir is in path)
+                is_preferred = in_dir in root if in_dir else True
+                candidates.append((root, file, is_preferred))
+        
+        # If we have any preferred candidates, use only those
+        # Otherwise, fall back to all candidates
+        has_preferred = any(is_preferred for _, _, is_preferred in candidates)
+        
+        for root, file, is_preferred in candidates:
+            if not has_preferred or is_preferred:
+                list_of_files.append(file)
+                list_of_directories.append(root)
                 
         return list_of_files, list_of_directories     

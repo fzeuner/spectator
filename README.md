@@ -1,36 +1,41 @@
-# Spectator - Spectropolarimetric Data Viewer
+# Spectator
 
-A Python-based visualization tool for multi-dimensional spectropolarimetric data, designed to replace IDL Z3showred.
+A Python-based interactive visualization tool for multi-dimensional 
+spectropolarimetric data - designed to replace IDL Z3showred.
 
-![example](docs/viewer.png)
+![viewer](docs/viewer.png)
 
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+  - [End users](#end-users)
+  - [z3showred — modern systems](#z3showred--modern-systems)
+  - [z3showred — old OS / instrument PCs](#z3showred--old-os--instrument-pcs)
+  - [Developers](#developers)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Acknowledgments](#acknowledgments)
+
+---
 
 ## Installation
 
-### End Users
+### End users
 
-For users who just want to install the package and use it programmatically:
+If you only want to use Spectator programmatically in your own Python project, install it via pip:
 
 ```bash
-# Install from GitHub with pip (not yet on PyPI)
-[uv venv --python 3.14]
-[uv] pip install git+https://github.com/fzeuner/spectator.git
-
-# Or add to an existing project with uv
-uv add git+https://github.com/fzeuner/spectator.git
+pip install git+https://github.com/fzeuner/spectator.git
 ```
 
-Requirements: Python 3.14+
+Requires Python 3.14+.
 
-### z3showred Users
+### z3showred — modern systems
 
-Follow below instructions to install z3showred - in case you want to install it on saturn/old instrument PCs, follow instructions on the branch os-old!
-
-#### 1. Install uv
-
-Follow the official guide: https://docs.astral.sh/uv/getting-started/installation/
-
-#### 2. Clone and set up
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.14+.
 
 ```bash
 git clone https://github.com/fzeuner/spectator.git ~/spectator
@@ -38,78 +43,61 @@ cd ~/spectator
 uv sync
 ```
 
-#### 3. Configure data path
-
-Copy the example config and point it to your data folder:
+**Configure data path:**
 
 ```bash
 mkdir -p ~/.config/spectator
 cp ~/spectator/config/file_config.json ~/.config/spectator/file_config.json
+# Edit the file and set "default_data_base_dir" to your data root
 ```
 
-Then edit `~/.config/spectator/file_config.json` and set `default_data_base_dir` to your data root:
-
-```json
-{
-  "default_data_base_dir": "/path/to/your/data"
-}
-```
-
-#### 4. Add alias
+**Add shell alias:**
 
 ```bash
 echo "alias z3showred='cd ~/spectator && ./z3showred.sh'" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-Then simply run:
+Then simply run `z3showred`.
+
+![File browser](docs/z3showred.png)
+
+### z3showred — old OS / instrument PCs
+
+For OS systems where PyQt6 cannot be installed (e.g. saturn, old instrument PCs), use the `os-old` branch which is based on PyQt5. Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
-z3showred
+git clone https://github.com/fzeuner/spectator.git ~/spectator
+cd ~/spectator
+git checkout os-old
+uv sync
 ```
+
+See the `os-old` branch README for the additional symlink setup steps.
 
 ### Developers
 
-For contributors or those modifying the code:
-
-**Prerequisites:**
-- Python 3.14+
-- [uv](https://docs.astral.sh/uv/) (modern Python package manager)
-
-**Setup:**
-
 ```bash
-# 1. Clone the repository
 git clone https://github.com/fzeuner/spectator.git
 cd spectator
-
-# 2. Create virtual environment and install dependencies
 uv sync
-
-# 3. The package is now installed in editable mode
-# Run an example to verify:
-uv run python examples/viewer_example.py
+uv run python examples/viewer_example.py  # verify
 ```
 
-**Development commands:**
+Useful commands:
 
 ```bash
-# Run tests
-uv run pytest
 
-# Run an example
 uv run python examples/scan_viewer_example.py
-
-# Add a dependency
-uv add <package-name>
-
-# Update lock file after manual pyproject.toml changes
-uv lock
+uv add <package>                           # add dependency
+uv lock                                    # update lock file
 ```
+
+---
 
 ## Usage
 
-### Programmatic Usage
+### Programmatic
 
 ```python
 from spectator.controllers.app_controller import display_data
@@ -125,32 +113,30 @@ viewer = display_data(
 )
 ```
 
-### Examples
+**Note:** The actual data array order does not matter, because the order you specify will be used to rearrange the data to match the expected layout for the viewer.
+
+### Available viewers
+
+| Viewer | Dimensions | Description |
+|--------|------------|-------------|
+| `spectator_viewer` | 3D (states, spectral, spatial_x) | Standard spectropolarimetric viewer with synchronized spectrum, and spatial windows |
+| `scan_viewer` | 4D (states, spectral, spatial_y, spatial_x) | Extended viewer for raster scan data with additional spatial Y dimension |
+
+More viewers for 2D and 5D data are planned.
+
+### Example scripts
 
 ```bash
-# 3D viewer (states, spectral, spatial)
-python examples/viewer_example.py
-
-# 4D scan viewer (states, spectral, spatial_y, spatial_x)
-python examples/scan_viewer_example.py
-
-# File browser (Z3showred-style)
-python examples/z3showred_example.py
+uv run python examples/viewer_example.py        # 3D: states × spectral × spatial
+uv run python examples/scan_viewer_example.py   # 4D: + spatial_y
+uv run python examples/z3showred_example.py     # ZIMPOL file browser
 ```
 
-![File browser](docs/z3showred.png)
+---
 
-## Features
+## Configuration
 
-- **Flexible data handling**: numpy arrays with configurable dimension semantics
-- **Synchronized views**: crosshairs, zoom, and averaging lines sync across all windows
-- **Spectral/spatial averaging**: interactive line-based region selection
-- **Per-state scaling**: automatic optimization for each Stokes parameter
-- **ZIMPOL support**: direct `.dat` file loading
-
-## Configuration (ZIMPOL file browser)
-
-Edit `~/.config/spectator/file_config.json` (local user config, location is defined in `utils/config.py` as `USER_CONFIG_DIR`/`USER_CONFIG_PATH`) (or `config/file_config.json` in repo):
+The file browser reads `~/.config/spectator/file_config.json` (user-local, takes priority) or `config/file_config.json` in the repo.
 
 ```json
 {
@@ -161,17 +147,17 @@ Edit `~/.config/spectator/file_config.json` (local user config, location is defi
 }
 ```
 
-- `default_data_base_dir`: Base data directory path
-- `auto_navigate_recent`: Auto-open most recent `YYMMDD` subdirectory
-- `must_be_in_directory`: Filter paths containing this substring
-- `excluded_file_terms`: Exclude files containing these terms
+| Key | Description |
+|-----|-------------|
+| `default_data_base_dir` | Base directory for data files |
+| `auto_navigate_recent` | Auto-open most recent `YYMMDD` subdirectory |
+| `must_be_in_directory` | Preferred subdirectory (e.g., 'reduced'). If present, files there are shown; if not, parent directory files are used |
+| `excluded_file_terms` | Skip files whose name contains any of these terms |
 
-## Architecture
-
-Spectator follows a **Model-View-Controller (MVC)** architecture pattern for maintainable and scalable code
+---
 
 ## Acknowledgments
 
-- **Franziska Zeuner**: Original concept, architecture, implementation
-- **PyQtGraph team**: Plotting library
-- **Claude Sonnet 4.5**: Development assistance
+- **Franziska Zeuner** — concept, architecture, implementation
+- **PyQtGraph team** — plotting library
+- **Claude Sonnet** — development assistance
