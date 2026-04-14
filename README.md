@@ -9,7 +9,6 @@ spectropolarimetric data - designed to replace IDL Z3showred.
 
 ## Table of Contents
 
-- [Features](#features)
 - [Installation](#installation)
   - [End users](#end-users)
   - [z3showred — modern systems](#z3showred--modern-systems)
@@ -33,7 +32,8 @@ pip install git+https://github.com/fzeuner/spectator.git
 
 Requires Python 3.14+.
 
-### z3showred — modern systems
+### z3showred 
+#### Modern systems
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.14+.
 
@@ -62,7 +62,7 @@ Then simply run `z3showred`.
 
 ![File browser](docs/z3showred.png)
 
-### z3showred — old OS / instrument PCs
+### Old OS / instrument PCs
 
 For OS systems where PyQt6 cannot be installed (e.g. saturn, old instrument PCs), use the `os-old` branch which is based on PyQt5. Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
@@ -74,6 +74,28 @@ uv sync
 ```
 
 See the `os-old` branch README for the additional symlink setup steps.
+
+#### Configuration
+
+The file browser reads `~/.config/spectator/file_config.json` (user-local, takes priority) or `config/file_config.json` in the repo.
+
+```json
+{
+  "default_data_base_dir": "/path/to/your/pdata",
+  "auto_navigate_recent": true,
+  "must_be_in_directory": "reduced",
+  "excluded_file_terms": ["cal", "dark", "ff"]
+}
+```
+
+| Key | Description |
+|-----|-------------|
+| `default_data_base_dir` | Base directory for data files |
+| `auto_navigate_recent` | Auto-open most recent `YYMMDD` subdirectory |
+| `must_be_in_directory` | Preferred subdirectory (e.g., 'reduced'). If present, files there are shown; if not, parent directory files are used |
+| `excluded_file_terms` | Skip files whose name contains any of these terms |
+
+---
 
 ### Developers
 
@@ -134,27 +156,7 @@ uv run python examples/z3showred_example.py     # ZIMPOL file browser
 
 ---
 
-## Configuration
 
-The file browser reads `~/.config/spectator/file_config.json` (user-local, takes priority) or `config/file_config.json` in the repo.
-
-```json
-{
-  "default_data_base_dir": "/path/to/your/pdata",
-  "auto_navigate_recent": true,
-  "must_be_in_directory": "reduced",
-  "excluded_file_terms": ["cal", "dark", "ff"]
-}
-```
-
-| Key | Description |
-|-----|-------------|
-| `default_data_base_dir` | Base directory for data files |
-| `auto_navigate_recent` | Auto-open most recent `YYMMDD` subdirectory |
-| `must_be_in_directory` | Preferred subdirectory (e.g., 'reduced'). If present, files there are shown; if not, parent directory files are used |
-| `excluded_file_terms` | Skip files whose name contains any of these terms |
-
----
 
 ## Acknowledgments
 
