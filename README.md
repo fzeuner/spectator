@@ -11,11 +11,9 @@ spectropolarimetric data - designed to replace IDL Z3showred.
 
 - [Installation](#installation)
   - [End users](#end-users)
-  - [z3showred — modern systems](#z3showred--modern-systems)
-  - [z3showred — old OS / instrument PCs](#z3showred--old-os--instrument-pcs)
+  - [z3showred](#z3showred)
   - [Developers](#developers)
 - [Usage](#usage)
-- [Configuration](#configuration)
 - [Acknowledgments](#acknowledgments)
 
 ---
