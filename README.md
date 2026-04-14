@@ -133,8 +133,8 @@ viewer = display_data(
 
 | Viewer | Dimensions | Description |
 |--------|------------|-------------|
-| `spectator_viewer` | 3D (states, spectral, spatial_x) | Standard spectropolarimetric viewer with synchronized spectrum, and spatial windows |
-| `scan_viewer` | 4D (states, spectral, spatial_y, spatial_x) | Extended viewer for raster scan data with additional spatial Y dimension |
+| `spectator_viewer` | 3D (states, spectral, spatial_x) | Standard spectropolarimetric viewer with synchronized spectra and spatial windows |
+| `scan_viewer` | 4D (states, spectral, spatial_y, spatial_x) | Extended viewer which includes an additional window for an image with two spatial dimensions |
 
 More viewers for 2D and 5D data are planned.
 
