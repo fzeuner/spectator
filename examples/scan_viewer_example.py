@@ -26,7 +26,7 @@ def main():
     # Launch viewer
     win = display_data(
         data,
-        order=['states', 'spatial_y', 'spectral', 'spatial_x'],
+        order=['states',  'spectral', 'spatial_y','spatial_x'],
         title='Scan Viewer Example',
         state_names=['I', 'Q'],
         rearrange=True

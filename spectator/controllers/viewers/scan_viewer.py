@@ -79,7 +79,7 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         if state_data.ndim != 3:
             raise ValueError(f"scan_viewer expects per-state 3D data (spectral, y, x); got shape {state_data.shape}")
 
-        stokes_data_wl_x = state_data[:, 0, :]  # (spectral, x) - slice at y=0
+        stokes_data_wl_x = state_data[0, :, :]  # (spectral, x) - slice at y=0
         initial_spec_y = state_data[:, :, 0].T if state_data.shape[2] > 0 else np.zeros((stokes_data_wl_x.shape[0], state_data.shape[0]))
 
         # Windows - use swapped config so x is on x-axis, spectral on y-axis (matches scan window)
