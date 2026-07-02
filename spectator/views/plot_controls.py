@@ -434,7 +434,8 @@ class PlotControlWidget(QtWidgets.QWidget):
     
     def init_spectrum_limit_controls(self, spectra_widgets: List,
                                    spectrum_image_widgets: List,
-                                   spatial_widgets: List):
+                                   spatial_widgets: List,
+                                   spectrum_image_y_widgets: Optional[List] = None):
         """
         Initialize spectrum limit controls for all Stokes parameters.
         
@@ -442,6 +443,7 @@ class PlotControlWidget(QtWidgets.QWidget):
             spectra_widgets: List of spectrum plot widgets
             spectrum_image_widgets: List of spectrum image widgets
             spatial_widgets: List of spatial plot widgets
+            spectrum_image_y_widgets: Optional list of Y-direction spectrum image widgets
         """
         # Use existing set_widget_collections method to avoid duplication
         self.set_widget_collections(spectrum_image_widgets, spectra_widgets, spatial_widgets)
@@ -449,6 +451,7 @@ class PlotControlWidget(QtWidgets.QWidget):
         for i, spectrum_widget in enumerate(self.spectra_widgets):
             spectrum_image_widget = self.spectrum_image_widgets[i] if i < len(self.spectrum_image_widgets) else None
             spatial_widget = self.spatial_widgets[i] if i < len(self.spatial_widgets) else None
+            spectrum_image_y_widget = spectrum_image_y_widgets[i] if spectrum_image_y_widgets and i < len(spectrum_image_y_widgets) else None
             if spectrum_image_widget is None:
                 continue
             
@@ -456,7 +459,8 @@ class PlotControlWidget(QtWidgets.QWidget):
                 stokes_name=spectrum_widget.name,
                 spectrum_widget=spectrum_widget,
                 spectrum_image_widget=spectrum_image_widget,
-                spatial_widget=spatial_widget
+                spatial_widget=spatial_widget,
+                spectrum_image_y_widget=spectrum_image_y_widget
             )
             
             if hasattr(self, 'z_limits_layout'):

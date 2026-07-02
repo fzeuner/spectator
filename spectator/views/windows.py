@@ -40,6 +40,7 @@ class StokesSpatialWindow(BasePlotWidget):
         self._setup_plot_items()
         self._setup_connections()
         self._initialize_plot_state()
+        self._fixed_x_range = None
 
     def _setup_plot_items(self):
         """Initializes plot curve, movable line, and label."""
@@ -219,6 +220,14 @@ class StokesSpatialWindow(BasePlotWidget):
         spectral_idx = self.data_model.validate_index(0, int(np.round(xpos_wl)))
         self.update_spatial_data_spectral(spectral_idx)
     
+    def set_fixed_x_range(self, min_val: float, max_val: float):
+        """Store a fixed X-axis range that persists through data updates."""
+        self._fixed_x_range = (min_val, max_val)
+
+    def clear_fixed_x_range(self):
+        """Clear the fixed X-axis range."""
+        self._fixed_x_range = None
+
     def update_spatial_data_spectral(self, spectral_idx: int):
         """Update spatial data based on spectral index."""
         # Validate and clamp index
@@ -228,6 +237,8 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plot_data = self.data_model.get_slice_at_index(0, spectral_idx)
         x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
         self.plot_curve.setData(x_coords, y_coords)
+        if self._fixed_x_range is not None:
+            self.plotItem.setXRange(*self._fixed_x_range, padding=0)
         self._update_label()
     
     def set_spectral_limits(self, x_min: float, x_max: float):
@@ -253,6 +264,8 @@ class StokesSpatialWindow(BasePlotWidget):
         self.plot_data = self.data_model.get_slice_at_index(0, idx)
         x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
         self.plot_curve.setData(x_coords, y_coords)
+        if self._fixed_x_range is not None:
+            self.plotItem.setXRange(*self._fixed_x_range, padding=0)
         self._update_label()
 
 class StokesSpectrumWindow(BasePlotWidget):
@@ -274,6 +287,7 @@ class StokesSpectrumWindow(BasePlotWidget):
         self._setup_plot_items()
         self._setup_connections()
         self._initialize_plot_state()
+        self._fixed_y_range = None
 
     def _setup_plot_items(self):
         """Initializes plot curve, movable line, and label."""
@@ -381,6 +395,14 @@ class StokesSpectrumWindow(BasePlotWidget):
         except AttributeError:
             print("Warning: update_spectral_line called before vLine was initialized.")
 
+    def set_fixed_y_range(self, min_val: float, max_val: float):
+        """Store a fixed Y-axis range that persists through data updates."""
+        self._fixed_y_range = (min_val, max_val)
+
+    def clear_fixed_y_range(self):
+        """Clear the fixed Y-axis range."""
+        self._fixed_y_range = None
+
     def update_spectrum_data(self, x_idx: int):
         """Updates the plotted spectrum data based on a new spatial index."""
         # Validate and clamp index
@@ -390,6 +412,8 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plot_data = self.data_model.get_slice_at_index(1, x_idx)
         x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
         self.plot_curve.setData(x_coords, y_coords)
+        if self._fixed_y_range is not None:
+            self.plotItem.setYRange(*self._fixed_y_range, padding=0)
         self._update_label()    
 
     def update_spectrum_data_x_avg(self, x_idx_l: int, x_idx_c: int , x_idx_h: int):
@@ -439,6 +463,8 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plot_data = self.data_model.get_slice_at_index(1, self.current_x_idx)
         x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
         self.plot_curve.setData(x_coords, y_coords)
+        if self._fixed_y_range is not None:
+            self.plotItem.setYRange(*self._fixed_y_range, padding=0)
         self._emit_y_range_changed(None, self.plotItem.viewRange()[1])
         self._update_label()
 
@@ -640,9 +666,32 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.is_dragging = False
         self.spectral_averaging_enabled = False  # Default to disabled
         self.spatial_averaging_enabled = True  # Default to enabled
+        self._fixed_histogram_levels = None
 
         # Averaging line managers will be initialized after labels are created
 
+
+    def set_fixed_levels(self, min_val: float, max_val: float):
+        """Store fixed histogram levels that persist through data updates."""
+        self._fixed_histogram_levels = (min_val, max_val)
+        # Disconnect histogram auto-leveling so setImage cannot reset the levels
+        try:
+            self.image_item.sigImageChanged.disconnect(self.histogram.item.imageChanged)
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+
+    def clear_fixed_levels(self):
+        """Clear the fixed histogram levels."""
+        self._fixed_histogram_levels = None
+        # Reconnect histogram auto-leveling (disconnect first to prevent duplicates)
+        try:
+            self.image_item.sigImageChanged.disconnect(self.histogram.item.imageChanged)
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        try:
+            self.image_item.sigImageChanged.connect(self.histogram.item.imageChanged)
+        except (TypeError, RuntimeError, AttributeError):
+            pass
 
     def _remove_final_lines(self):
         # Remove both spectral and spatial averaging lines
@@ -1080,7 +1129,11 @@ class StokesSpectrumImageWindow(BasePlotWidget):
             # Swapped: spatial on x, spectral on y
             img = self.data if axis_order == 'row-major' else self.data.T
         
-        self.image_item.setImage(img)
+        if self._fixed_histogram_levels is not None:
+            self.image_item.setImage(img, autoLevels=False)
+            self.histogram.setLevels(*self._fixed_histogram_levels)
+        else:
+            self.image_item.setImage(img)
 
         # Set image rectangle based on which dimension is on which axis
         if config.x_data_dim == 0:
@@ -1209,6 +1262,27 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
         self._setup_image_plot()
         self._setup_axes()
         self._setup_crosshair()
+        self._fixed_histogram_levels = None
+
+    def set_fixed_levels(self, min_val: float, max_val: float):
+        """Store fixed histogram levels that persist through data updates."""
+        self._fixed_histogram_levels = (min_val, max_val)
+        try:
+            self.image_item.sigImageChanged.disconnect(self.histogram.item.imageChanged)
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+
+    def clear_fixed_levels(self):
+        """Clear the fixed histogram levels."""
+        self._fixed_histogram_levels = None
+        try:
+            self.image_item.sigImageChanged.disconnect(self.histogram.item.imageChanged)
+        except (TypeError, RuntimeError, AttributeError):
+            pass
+        try:
+            self.image_item.sigImageChanged.connect(self.histogram.item.imageChanged)
+        except (TypeError, RuntimeError, AttributeError):
+            pass
 
     def _setup_image_plot(self):
         self.image_item = pg.ImageItem()
@@ -1339,7 +1413,11 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
 
         axis_order = pg.getConfigOption('imageAxisOrder')
         img = self.data.T if axis_order == 'row-major' else self.data
-        self.image_item.setImage(img)
+        if self._fixed_histogram_levels is not None:
+            self.image_item.setImage(img, autoLevels=False)
+            self.histogram.setLevels(*self._fixed_histogram_levels)
+        else:
+            self.image_item.setImage(img)
 
         x_min_spectral = self.spectral_pixels[0] if self.spectral_pixels.size > 0 else 0
         x_max_spectral = self.spectral_pixels[-1] if self.spectral_pixels.size > 0 else self.n_spectral

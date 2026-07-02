@@ -206,7 +206,7 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
 
     # Setup z-limit controls (use x-spectrum-image + x-spatial slice for existing controls)
     try:
-        control_widget.init_spectrum_limit_controls(spectra, image_spectra_x, spatial_x)
+        control_widget.init_spectrum_limit_controls(spectra, image_spectra_x, spatial_x, image_spectra_y)
     except Exception as e:
         print(f"Warning: could not initialize limit controls: {e}")
 
