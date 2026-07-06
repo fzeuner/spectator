@@ -4,7 +4,7 @@ from spectator.controllers.app_controller import display_data
 
 
 def main():
-    data = np.load('/home/zeuner/data/testdata.npy')
+    data = np.load('/home/franziskaz/data/testdata.npy')
 
     # Launch viewer
     win = display_data(

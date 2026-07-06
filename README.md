@@ -127,7 +127,7 @@ viewer = display_data(
 )
 ```
 
-**Note:** The actual data array order does not matter, because the order you specify will be used to rearrange the data to match the expected layout for the viewer.
+**Note:** The actual data array order does not matter, because the order you specify will be used to rearrange the data to match the expected layout for the viewer. The viewer will be automatically chosen based on the input array dimensions. See available viewers below.
 
 ### Available viewers
 
@@ -137,6 +137,11 @@ viewer = display_data(
 | `scan_viewer` | 4D (states, spectral, spatial_y, spatial_x) | Extended viewer which includes an additional window for an image with two spatial dimensions |
 
 More viewers for 2D and 5D data are planned.
+
+#### spectator_viewer
+![viewer](docs/viewer.png)
+#### scan_viewer
+![viewer](docs/scan_viewer.png)
 
 ### Example scripts
 

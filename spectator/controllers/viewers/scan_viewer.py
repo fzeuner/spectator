@@ -191,8 +191,8 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         area.addDock(docks["spec_img_x"][base_name], 'right', docks["scan"][base_name])
         area.addDock(docks["spec_img_y"][base_name], 'below', docks["spec_img_x"][base_name])
         area.addDock(docks["spatial_x"][base_name], 'right', docks["spec_img_x"][base_name])
-        area.addDock(docks["spectrum"][base_name], 'above', docks["spatial_x"][base_name])
-        area.addDock(docks["spatial_y"][base_name], 'below', docks["spatial_x"][base_name])
+        area.addDock(docks["spatial_y"][base_name], 'above', docks["spatial_x"][base_name])
+        area.addDock(docks["spectrum"][base_name], 'below', docks["spatial_x"][base_name])
 
     # Add average spectrum at bottom and control at right
     if avg_spectrum_dock is not None:
