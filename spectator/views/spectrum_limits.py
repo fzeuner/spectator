@@ -110,6 +110,22 @@ class SpectrumLimitControlGroup(BaseControlWidget):
             edit.setText(fmt.format(val))
             edit.blockSignals(False)
 
+    def _histogram_targets(self):
+        """Return histogram objects for spectrum image x and y widgets (if present)."""
+        hists = []
+        for widget in (self.spectrum_image_widget, self.spectrum_image_y_widget):
+            hist = getattr(widget, 'histogram', None) if widget else None
+            if hist:
+                hists.append(hist)
+        return hists
+
+    def _set_histogram_levels(self, min_val: float, max_val: float):
+        """Apply levels to both x and y histograms without re-triggering sync."""
+        for hist in self._histogram_targets():
+            hist.blockSignals(True)
+            hist.setLevels(min_val, max_val)
+            hist.blockSignals(False)
+
     def _current_histogram_range(self):
         """Return (min, max) from the histogram levels, falling back to image data."""
         widget = self.spectrum_image_widget
@@ -156,6 +172,8 @@ class SpectrumLimitControlGroup(BaseControlWidget):
         ):
             if widget and hasattr(widget, method):
                 getattr(widget, method)(min_val, max_val)
+        # Keep both x and y histograms visually in sync without re-triggering sigLevelsChanged
+        self._set_histogram_levels(min_val, max_val)
 
     def _clear_fixed_limits(self):
         """Clear the stored fixed values so data updates no longer enforce them."""
@@ -168,12 +186,14 @@ class SpectrumLimitControlGroup(BaseControlWidget):
             if widget and hasattr(widget, method):
                 getattr(widget, method)()
 
-    def _toggle_fix_spectrum_limits(self, state: QtCore.Qt.CheckState):
+    def _toggle_fix_spectrum_limits(self, state):
         """Toggle fixed spectrum limits mode."""
-        fixed = state == QtCore.Qt.CheckState.Checked
+        # stateChanged emits a plain int (0/1/2) rather than the CheckState enum,
+        # so compare against int(Checked) / truthiness instead of the enum directly.
+        fixed = bool(state)
         self.min_limit_edit.setReadOnly(not fixed)
         self.max_limit_edit.setReadOnly(not fixed)
-        hist = getattr(self.spectrum_image_widget, 'histogram', None)
+        hists = self._histogram_targets()
 
         if fixed:
             # Seed the edit boxes from the current image range, then apply
@@ -182,28 +202,47 @@ class SpectrumLimitControlGroup(BaseControlWidget):
                 self._set_edit_values(min_val, max_val, "{:.4f}")
             self._update_spectrum_limits_from_edits()
             self._set_autorange(False)
-            if hist:
-                hist.sigLevelsChanged.connect(self._on_histogram_levels_changed)
+            self._histogram_handlers = {}
+            for hist in hists:
+                handler = self._make_histogram_changed_handler(hist)
+                self._histogram_handlers[id(hist)] = handler
+                hist.sigLevelsChanged.connect(handler)
         else:
             self._clear_fixed_limits()
             self._set_autorange(True)
-            if hist:
-                try:
-                    hist.sigLevelsChanged.disconnect(self._on_histogram_levels_changed)
-                except (TypeError, RuntimeError):
-                    pass
-                # Reset histogram levels to the current data range
-                min_val, max_val = self._current_histogram_range()
-                if min_val is not None:
-                    hist.setLevels(min_val, max_val)
+            for hist in hists:
+                handler = getattr(self, '_histogram_handlers', {}).pop(id(hist), None)
+                if handler is not None:
+                    try:
+                        hist.sigLevelsChanged.disconnect(handler)
+                    except (TypeError, RuntimeError):
+                        pass
+            # Reset histogram levels to the current data range
+            min_val, max_val = self._current_histogram_range()
+            if min_val is not None:
+                self._set_histogram_levels(min_val, max_val)
 
-    def _on_histogram_levels_changed(self):
-        """Sync edit boxes and all z-axis plots from the histogram levels."""
+    def _make_histogram_changed_handler(self, hist):
+        """Create a handler bound to a specific histogram object.
+
+        HistogramLUTWidget delegates sigLevelsChanged to its internal item,
+        so self.sender() inside a shared slot would not reliably identify
+        which widget emitted the signal. Binding the widget explicitly avoids
+        that ambiguity.
+        """
+        def _handler():
+            self._on_histogram_levels_changed(hist)
+        return _handler
+
+    def _on_histogram_levels_changed(self, hist=None):
+        """Sync edit boxes and all z-axis plots from whichever histogram changed."""
         if not self.fix_limits_checkbox.isChecked():
             return
-        if not (self.spectrum_image_widget and self.spectrum_image_widget.histogram):
+        if hist is None:
+            hist = getattr(self.spectrum_image_widget, 'histogram', None)
+        if not hist:
             return
-        min_val, max_val = self.spectrum_image_widget.histogram.getLevels()
+        min_val, max_val = hist.getLevels()
         self._set_edit_values(min_val, max_val)
         self._apply_fixed_limits(min_val, max_val)
 
@@ -222,9 +261,8 @@ class SpectrumLimitControlGroup(BaseControlWidget):
 
         if self.fix_limits_checkbox.isChecked():
             self._apply_fixed_limits(min_val, max_val)
-
-        if self.spectrum_image_widget and self.spectrum_image_widget.histogram:
-            self.spectrum_image_widget.histogram.setLevels(min_val, max_val)
+        else:
+            self._set_histogram_levels(min_val, max_val)
     
     def _update_limit_edits_from_plot(self, limits: Tuple[float, float]):
         """Update min/max QLineEdit widgets from plot's actual Y-range."""

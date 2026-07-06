@@ -423,6 +423,33 @@ class StokesSpectrumWindow(BasePlotWidget):
         x_coords, y_coords = self.data_model.get_plot_data(self.plot_data_avg)
         self.plot_curve_spectral_avg.setData(x_coords, y_coords)
         self._update_label_x_avg()
+
+    def update_spectrum_data_y(self, y_idx: int, y_data: np.ndarray):
+        """Updates the spectrum window to display data from a y-slice.
+        
+        Args:
+            y_idx: The y index to extract the spectrum from
+            y_data: The y-slice data of shape (spectral, y)
+        """
+        if y_data.ndim != 2:
+            raise ValueError(f"update_spectrum_data_y expects 2D data (spectral, y); got shape {y_data.shape}")
+        
+        # Temporarily update data model with y-slice data
+        original_data = self.data_model.data
+        self.data_model.update_data(y_data)
+        
+        # Update spectrum with the y index (treated as spatial index in the y-slice)
+        y_idx = self.data_model.validate_index(1, y_idx)
+        self.current_x_idx = y_idx
+        self.plot_data = self.data_model.get_slice_at_index(1, y_idx)
+        x_coords, y_coords = self.data_model.get_plot_data(self.plot_data)
+        self.plot_curve.setData(x_coords, y_coords)
+        if self._fixed_y_range is not None:
+            self.plotItem.setYRange(*self._fixed_y_range, padding=0)
+        self._update_label()
+        
+        # Restore original data model
+        self.data_model.update_data(original_data)
     
     @QtCore.pyqtSlot(float, float, float, int)
     def handle_spatial_avg_line_movement(self, y_low: float, y_center: float, y_high: float, source_stokes_index: int):

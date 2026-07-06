@@ -354,6 +354,10 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
             image_spectra_y[i].crosshairMoved.connect(
                 lambda spectral_pos, spatial_pos, idx=i: spectra[idx].update_spectral_line(spectral_pos) if idx < len(spectra) else None
             )
+            # Connect spectrum image y crosshair to update spectrum data with y-slice data
+            image_spectra_y[i].crosshairMoved.connect(
+                lambda spectral_pos, spatial_pos, idx=i: spectra[idx].update_spectrum_data_y(int(np.clip(np.round(spatial_pos), 0, image_spectra_y[idx].data.shape[1] - 1)), image_spectra_y[idx].data) if idx < len(spectra) else None
+            )
 
         if i < len(spectra):
             image_spectra_x[i].viewRangeChanged.connect(
