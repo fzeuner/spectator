@@ -96,7 +96,7 @@ class AxisConfigs:
     """Factory methods for common window type configurations."""
     
     @staticmethod
-    def spatial_window() -> AxisConfig:
+    def spatial_window(label: str = "x") -> AxisConfig:
         """Config for StokesSpatialWindow - default (z vs x, swapped).
         
         Data shape: (spectral, x)
@@ -106,6 +106,9 @@ class AxisConfigs:
         Note: We slice along spectral dimension to get 1D spatial profile.
         The profile data values go on x-axis, spatial indices go on y-axis.
         Used by spectator_viewer.
+
+        Args:
+            label: Name of the spatial axis (e.g. "x" or "y") for display purposes.
         """
         return AxisConfig(
             x_axis_source='index',  # spatial indices (will be swapped to y)
@@ -113,7 +116,7 @@ class AxisConfigs:
             x_data_dim=1,  # spatial dimension for indices
             y_data_dim=0,  # not used since y comes from data
             x_label="z",
-            y_label="x",
+            y_label=label,
             x_units="",
             y_units="pixel",
             line_angle=0,  # horizontal line (after swap)
@@ -188,12 +191,15 @@ class AxisConfigs:
         )
     
     @staticmethod
-    def spectrum_image_window_default() -> AxisConfig:
+    def spectrum_image_window_default(label: str = "x") -> AxisConfig:
         """Config for StokesSpectrumImageWindow - default orientation (spectator_viewer).
         
         Data: 2D image (spectral, x)
         Plot: x-axis shows spectral, y-axis shows spatial_x
         For spectator_viewer compatibility
+
+        Args:
+            label: Name of the spatial axis (e.g. "x" or "y") for display purposes.
         """
         return AxisConfig(
             x_axis_source='index',
@@ -201,7 +207,7 @@ class AxisConfigs:
             x_data_dim=0,  # spectral dimension
             y_data_dim=1,  # spatial_x dimension
             x_label="λ",
-            y_label="x",
+            y_label=label,
             x_units="pixel",
             y_units="pixel",
             line_angle=None,  # image window, no draggable line

@@ -26,6 +26,8 @@ DEFAULT_AXIS_ORDERS: Dict[int, Tuple[str, ...]] = {
 VIEWER_SELECTION_RULES: Dict[Tuple[str, ...], str] = {
     # 3D canonical viewer: states, spectral, spatial_x
     ("states", "spectral", "spatial_x"): "spectator",
+    # 3D canonical viewer with spatial_y instead of spatial_x
+    ("states", "spectral", "spatial_y"): "spectator",
     # 4D scan viewer: states, spectral, spatial_y, spatial_x
     ("states", "spatial_y", "spectral", "spatial_x"): "scan_viewer",
 }

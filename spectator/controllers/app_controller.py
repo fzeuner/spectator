@@ -568,7 +568,8 @@ class Manager:
                 # Get state names from metadata
                 state_names = metadata.get('states_info', {}).get('names', None)
                 scale_info = metadata.get('scale_info', None)
-                return spectator(data, title=metadata['title'], state_names=state_names, scale_info=scale_info)
+                spatial_label = "y" if 'spatial_y_axis' in metadata else "x"
+                return spectator(data, title=metadata['title'], state_names=state_names, scale_info=scale_info, spatial_label=spatial_label)
             else:
                 raise NotImplementedError(f"3D viewer for axis configuration {metadata['axes']} not yet implemented")
         elif viewer_type == "scan_viewer":

@@ -16,9 +16,10 @@ from ...views import PlotControlWidget
 from ...views.windows import (
     StokesSpectrumWindow, StokesSpectrumImageWindow, StokesSpatialWindow
 )
+from ...models import AxisConfigs
 
 
-def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str] = None, scale_info: Dict[str, Any] = None):
+def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str] = None, scale_info: Dict[str, Any] = None, spatial_label: str = "x"):
     """
     Main function to create and display the interactive data viewer.
 
@@ -27,6 +28,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         title: Window title.
         state_names: List of names for the states (e.g., ['I', 'Q', 'U', 'V'])
         scale_info: Dictionary with scaling information for display
+        spatial_label: Label for the spatial axis (e.g. "x" or "y")
     """  
     # Use existing QApplication if present, otherwise create one
     app = QtWidgets.QApplication.instance()
@@ -65,8 +67,8 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
 
         # Create Widgets for this Stokes parameter (all consume (wl, x))
         win_spectrum = StokesSpectrumWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
-        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info)
-        win_spatial = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name)
+        win_image_spectrum = StokesSpectrumImageWindow(stokes_data_wl_x, stokes_index=i, name=base_name, scale_info=scale_info, config=AxisConfigs.spectrum_image_window_default(label=spatial_label))
+        win_spatial = StokesSpatialWindow(stokes_data_wl_x, stokes_index=i, name=base_name, config=AxisConfigs.spatial_window(label=spatial_label))
 
         # Append to lists
         spectra.append(win_spectrum)

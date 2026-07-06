@@ -99,7 +99,9 @@ class StokesSpatialWindow(BasePlotWidget):
         if hasattr(self, 'plot_data') and isinstance(self.plot_data, np.ndarray) and spatial_idx < len(self.plot_data):
             intensity_value = self.plot_data[spatial_idx]
         
-        self.label.setText(f"x={spatial_pos:.0f}, z={intensity_value:.5f}", size='8pt')
+        config = self.data_model.config
+        spatial_label = (config.y_label if config.swap_plot_coords else config.x_label) or "x"
+        self.label.setText(f"{spatial_label}={spatial_pos:.0f}, z={intensity_value:.5f}", size='8pt')
         
     def _on_hline_moved(self):
         """Handles internal hLine movement and emits signal."""
