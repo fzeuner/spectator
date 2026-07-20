@@ -297,14 +297,20 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plotItem.addItem(self.plot_curve)
         
         colors = getWidgetColors()
-        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_h', 'dodgerblue'), style=SOLID_LINE, width=2)) 
+        self.plot_curve_spectral_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_spatial_x', 'dodgerblue'), style=SOLID_LINE, width=2)) 
         self.plotItem.addItem(self.plot_curve_spectral_avg)
+
+        self.plot_curve_spatial_y_avg = pg.PlotDataItem(pen=pg.mkPen(colors.get('averaging_spatial_y', '#2ecc71'), style=SOLID_LINE, width=2))
+        self.plotItem.addItem(self.plot_curve_spatial_y_avg)
 
         colors = getWidgetColors()
         self.vLine = add_line(self.plotItem, colors.get('draggable_line', 'white'), 90, moveable=True)
 
-        self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))      
+        self.label_avg = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_spatial_x', 'dodgerblue'))      
         self.graphics_widget.addItem(self.label_avg, row=1, col=1) 
+
+        self.label_avg_spatial_y = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_spatial_y', '#2ecc71'))
+        self.graphics_widget.addItem(self.label_avg_spatial_y, row=1, col=2)
 
         initialize_spectrum_plot_item(self.plotItem, y_label="z")
         
@@ -364,6 +370,8 @@ class StokesSpectrumWindow(BasePlotWidget):
         # Also update spatial averaging label if it exists
         if hasattr(self, 'plot_data_avg') and hasattr(self, 'current_x_idx_avg'):
             self._update_label_x_avg()
+        if hasattr(self, 'plot_data_spatial_y_avg'):
+            self._update_label_spatial_y_avg()
 
     def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
         """Updates the spectral-axis range of the spectrum plot."""
@@ -426,6 +434,16 @@ class StokesSpectrumWindow(BasePlotWidget):
         self.plot_curve_spectral_avg.setData(x_coords, y_coords)
         self._update_label_x_avg()
 
+    def _update_label_spatial_y_avg(self):
+        """Updates the coordinate label for spatial_y averaged region."""
+        wl_value = self.vLine.value() if hasattr(self, 'vLine') and self.vLine else getattr(self, 'current_y_idx_avg', 0)
+        spectral_indices = self.data_model.get_index_array(0)
+        wl_idx = np.argmin(np.abs(spectral_indices - wl_value)) if spectral_indices.size > 0 else -1
+        intensity_value = np.nan
+        if isinstance(self.plot_data_spatial_y_avg, np.ndarray) and self.plot_data_spatial_y_avg.ndim == 1 and 0 <= wl_idx < self.plot_data_spatial_y_avg.size:
+            intensity_value = self.plot_data_spatial_y_avg[wl_idx]
+        self.label_avg_spatial_y.setText(f"z= {intensity_value:.3f}")
+
     def update_spectrum_data_y(self, y_idx: int, y_data: np.ndarray):
         """Updates the spectrum window to display data from a y-slice.
         
@@ -452,7 +470,28 @@ class StokesSpectrumWindow(BasePlotWidget):
         
         # Restore original data model
         self.data_model.update_data(original_data)
-    
+
+    def update_spectrum_data_spatial_y_avg(self, y_idx_l: int, y_idx_c: int, y_idx_h: int, y_data: np.ndarray):
+        """Updates the plotted spectrum data based on a spatial_y averaging region.
+
+        Args:
+            y_idx_l: Lower y index of the averaging region
+            y_idx_c: Center y index of the averaging region
+            y_idx_h: Upper y index of the averaging region
+            y_data: The y-slice data of shape (spectral, y)
+        """
+        if y_data.ndim != 2:
+            raise ValueError(f"update_spectrum_data_spatial_y_avg expects 2D data (spectral, y); got shape {y_data.shape}")
+
+        self.current_y_idx_avg = y_idx_c
+        self.plot_data_spatial_y_avg = y_data[:, y_idx_l:y_idx_h + 1].mean(axis=1)
+
+        spectral_indices = self.data_model.get_index_array(0)
+        # Ensure data aligns with current spectral indices length
+        n_spectral = min(len(spectral_indices), len(self.plot_data_spatial_y_avg))
+        self.plot_curve_spatial_y_avg.setData(spectral_indices[:n_spectral], self.plot_data_spatial_y_avg[:n_spectral])
+        self._update_label_spatial_y_avg()
+
     @QtCore.pyqtSlot(float, float, float, int)
     def handle_spatial_avg_line_movement(self, y_low: float, y_center: float, y_high: float, source_stokes_index: int):
         """Handle spatial averaging line movement from spectrum image window."""
@@ -463,6 +502,27 @@ class StokesSpectrumWindow(BasePlotWidget):
         
         # Update spectrum data with spatial averaging
         self.update_spectrum_data_x_avg(y_idx_low, y_idx_center, y_idx_high)
+
+    def handle_spatial_y_avg_line_movement(self, y_low: float, y_center: float, y_high: float, y_data: np.ndarray):
+        """Handle spatial_y averaging line movement from spectrum y-image window."""
+        if y_data.ndim != 2:
+            raise ValueError(f"handle_spatial_y_avg_line_movement expects 2D data (spectral, y); got shape {y_data.shape}")
+
+        n_y = y_data.shape[1]
+        y_idx_low = int(np.clip(np.round(y_low), 0, n_y - 1))
+        y_idx_center = int(np.clip(np.round(y_center), 0, n_y - 1))
+        y_idx_high = int(np.clip(np.round(y_high), 0, n_y - 1))
+
+        self.update_spectrum_data_spatial_y_avg(y_idx_low, y_idx_center, y_idx_high, y_data)
+
+    def clear_spatial_y_averaging(self):
+        """Clear the spatial_y averaged curve and label."""
+        if hasattr(self, 'plot_data_spatial_y_avg'):
+            delattr(self, 'plot_data_spatial_y_avg')
+        if hasattr(self, 'current_y_idx_avg'):
+            delattr(self, 'current_y_idx_avg')
+        self.plot_curve_spatial_y_avg.setData([], [])
+        self.label_avg_spatial_y.setText("")
     
     def clear_averaging_regions(self):
         """Clear all spectrum averaging regions and reset to clean state."""
@@ -885,6 +945,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.plotItem.getAxis('left').setStyle(showValues=True)
         self.plotItem.getAxis('left').enableAutoSIPrefix(False)
         self.plotItem.getAxis('right').setLabel(text=config.y_label, units=config.y_units)
+        self.plotItem.getAxis('right').enableAutoSIPrefix(False)
         self.plotItem.getAxis('bottom').setStyle(showValues=False)
         self.plotItem.getAxis('top').setStyle(showValues=True, tickFont=TICK_FONT)
         
@@ -929,7 +990,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         self.graphics_widget.addItem(self.label_avg_spectral, row=1, col=1)
         
         # Add blue spatial averaging label using same positioning as spectrum windows  
-        self.label_avg_spatial = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_h', 'dodgerblue'))
+        self.label_avg_spatial = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_spatial_x', 'dodgerblue'))
         self.graphics_widget.addItem(self.label_avg_spatial, row=1, col=2)
         
         # Initialize averaging line managers based on axis configuration
@@ -945,7 +1006,7 @@ class StokesSpectrumImageWindow(BasePlotWidget):
         )
         self.spatial_manager = AveragingLineManager(
             self.plotItem, spatial_orientation, self.n_x_pixel, self.stokes_index,
-            'averaging_h', self.label_avg_spatial
+            'averaging_spatial_x', self.label_avg_spatial
         )
         
         # Connect signals
@@ -1273,6 +1334,7 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
     """
 
     crosshairMoved = QtCore.pyqtSignal(float, float, int)  # spectral_idx, y_idx, stokes_index
+    spatialYAvgRegionChanged = QtCore.pyqtSignal(float, float, float, int)  # y_low, y_center, y_high, stokes_index
 
     def __init__(self, data: np.ndarray, stokes_index: int, name: str, scale_info: dict = None):
         super().__init__(None)
@@ -1291,6 +1353,7 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
         self._setup_image_plot()
         self._setup_axes()
         self._setup_crosshair()
+        self._setup_spatial_y_avg()
         self._fixed_histogram_levels = None
 
     def set_fixed_levels(self, min_val: float, max_val: float):
@@ -1382,6 +1445,39 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
         self.graphics_widget.addItem(self.label, row=1, col=1)
         self._update_label(mid_spectral, mid_y)
 
+    def _setup_spatial_y_avg(self):
+        """Set up the spatial_y averaging line manager."""
+        colors = getWidgetColors()
+        self.label_avg_spatial_y = pg.LabelItem(justify='left', size='8pt', color=colors.get('averaging_spatial_y', '#2ecc71'))
+        self.graphics_widget.addItem(self.label_avg_spatial_y, row=1, col=2)
+
+        self.spatial_y_averaging_enabled = False
+
+        self.spatial_y_manager = AveragingLineManager(
+            self.plotItem, 'horizontal', self.n_y_pixel, self.stokes_index,
+            'averaging_spatial_y', self.label_avg_spatial_y
+        )
+        self.spatial_y_manager.label_terms = ('l', 'c', 'r')
+        self.spatial_y_manager.regionChanged.connect(self.spatialYAvgRegionChanged)
+
+        def _on_spatial_y_created():
+            if hasattr(self, 'control_widget'):
+                getattr(self.control_widget, 'notify_spatial_y_region_added', lambda: None)()
+                getattr(self.control_widget, 'activate_spatial_y_button', lambda: None)()
+
+        def _on_spatial_y_removed():
+            if hasattr(self, 'control_widget'):
+                getattr(self.control_widget, 'deactivate_spatial_y_button', lambda: None)()
+                getattr(self.control_widget, 'notify_spatial_y_region_removed', lambda: None)()
+
+        self.spatial_y_manager.on_region_created = _on_spatial_y_created
+        self.spatial_y_manager.on_region_removed = _on_spatial_y_removed
+
+        self.right_button_pressed = False
+        self.drag_start_pos = None
+        self.is_dragging = False
+        self._fixed_histogram_levels = None
+
     def _update_label(self, xpos_wl: float, ypos_y: float):
         index_spectral = np.clip(int(np.round(xpos_wl)), 0, self.n_spectral - 1)
         index_y = np.clip(int(np.round(ypos_y)), 0, self.n_y_pixel - 1)
@@ -1466,6 +1562,96 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
             self.vLine.setPos(x)
             self.hLine.setPos(y)
             self._update_label(x, y)
+
+        if hasattr(self, 'spatial_y_manager'):
+            self.spatial_y_manager.set_data_range(self.n_y_pixel)
+
+    def eventFilter(self, obj, event):
+        """Handle right-click drag to create spatial_y averaging region."""
+        if obj is not self.plotItem.vb:
+            return super().eventFilter(obj, event)
+
+        if not getattr(self, 'spatial_y_averaging_enabled', False):
+            # Block right-click when spatial_y averaging mode is not selected
+            if event.type() in (QtCore.QEvent.Type.MouseButtonPress,
+                                QtCore.QEvent.Type.MouseMove,
+                                QtCore.QEvent.Type.MouseButtonRelease) and \
+                    event.button() == QtCore.Qt.MouseButton.RightButton:
+                return True
+            return super().eventFilter(obj, event)
+
+        if event.type() == QtCore.QEvent.Type.MouseButtonPress:
+            if event.button() == QtCore.Qt.MouseButton.RightButton:
+                self._handle_mouse_press(event)
+                return True
+        elif event.type() == QtCore.QEvent.Type.MouseMove:
+            if self.right_button_pressed:
+                self._handle_mouse_move(event)
+                return True
+        elif event.type() == QtCore.QEvent.Type.MouseButtonRelease:
+            if event.button() == QtCore.Qt.MouseButton.RightButton:
+                self._handle_mouse_release(event)
+                return True
+
+        return super().eventFilter(obj, event)
+
+    def _handle_mouse_press(self, event):
+        """Start spatial_y averaging drag."""
+        self.right_button_pressed = True
+        self.is_dragging = False
+        self.drag_start_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
+        if hasattr(self, 'spatial_y_manager'):
+            self.spatial_y_manager._remove_preview_lines()
+            self.spatial_y_manager.begin_drag_at(self.drag_start_pos.y())
+
+    def _handle_mouse_move(self, event):
+        """Update spatial_y averaging preview."""
+        if not self.right_button_pressed or self.drag_start_pos is None:
+            return
+        self.is_dragging = True
+        current_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
+        if hasattr(self, 'spatial_y_manager'):
+            self.spatial_y_manager.update_drag_to(current_pos.y())
+
+    def _handle_mouse_release(self, event):
+        """Finish spatial_y averaging drag."""
+        if not self.right_button_pressed:
+            return
+        if self.is_dragging and self.drag_start_pos is not None:
+            end_pos = self.plotItem.vb.mapSceneToView(event.scenePos())
+            if hasattr(self, 'spatial_y_manager'):
+                self.spatial_y_manager.end_drag_at(end_pos.y())
+        if hasattr(self, 'spatial_y_manager'):
+            self.spatial_y_manager._remove_preview_lines()
+        self.right_button_pressed = False
+        self.drag_start_pos = None
+        self.is_dragging = False
+
+    def create_default_spatial_y_averaging(self):
+        """Create a default spatial_y averaging region."""
+        if hasattr(self, 'spatial_y_manager'):
+            self.spatial_y_manager.create_default_lines()
+
+    def remove_spatial_y_averaging(self):
+        """Remove the spatial_y averaging region."""
+        if hasattr(self, 'spatial_y_manager'):
+            had_lines = self.spatial_y_manager.has_lines()
+            self.spatial_y_manager.remove_lines()
+            if had_lines and hasattr(self, 'control_widget'):
+                if hasattr(self.control_widget, 'deactivate_spatial_y_button'):
+                    self.control_widget.deactivate_spatial_y_button()
+                if hasattr(self.control_widget, 'notify_spatial_y_region_removed'):
+                    self.control_widget.notify_spatial_y_region_removed()
+
+    @QtCore.pyqtSlot(bool)
+    def set_spatial_y_averaging_enabled(self, enabled: bool):
+        """Enable/disable spatial_y averaging mode."""
+        self.spatial_y_averaging_enabled = bool(enabled)
+
+    def sync_spatial_y_averaging_lines(self, lower_pos: float, center_pos: float, upper_pos: float, source_stokes_index: int):
+        """Synchronize spatial_y averaging lines from another window."""
+        if source_stokes_index != self.stokes_index and hasattr(self, 'spatial_y_manager') and self.spatial_y_manager.has_lines():
+            self.spatial_y_manager.set_positions(lower_pos, center_pos, upper_pos, block_signals=True)
 
     def update_spectral_range(self, min_val: Optional[float], max_val: Optional[float]):
         set_plot_wavelength_range(self.plotItem, self.spectral_pixels, min_val, max_val, axis='x')

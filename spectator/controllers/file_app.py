@@ -112,19 +112,10 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         # must_be_in_directory subfolder (e.g. 'reduced').
         try:
             start_dir = getattr(self.file_lister, '_start_directory', '') or ''
-            must_dir = getattr(self.file_lister, 'must_be_in_directory', None)
-            if start_dir:
-                start_dir = os.path.abspath(os.path.expanduser(start_dir))
-                # If the file browser start directory is exactly the special
-                # subdirectory (e.g. '.../reduced'), move one level up so the
-                # observer log uses the parent directory.
-                if must_dir:
-                    base, leaf = os.path.split(start_dir.rstrip(os.sep))
-                    if leaf == must_dir and base:
-                        start_dir = base
-                if os.path.isdir(start_dir):
-                    self.observer_dir_edit.setText(start_dir)
-                    self._load_observer_log_from_dir(start_dir)
+            base_dir = self._derive_observer_base_dir(start_dir)
+            if base_dir and os.path.isdir(base_dir):
+                self.observer_dir_edit.setText(base_dir)
+                self._load_observer_log_from_dir(base_dir)
         except Exception:
             pass
 
@@ -134,6 +125,11 @@ class FileBrowserApp(QtWidgets.QMainWindow):
     def _connect_signals(self):
         # Clicking a file in the list triggers loading
         self.file_lister.fileSelected.connect(self._on_file_selected)
+        # Navigating to a new directory refreshes the observer log immediately
+        try:
+            self.file_lister.directoryChanged.connect(self._on_browser_directory_changed)
+        except Exception:
+            pass
         # 'Display' toggle replaced 'List info' button; info is refreshed automatically on load
         # Loader results
         self.file_loader.dataLoaded.connect(self._on_data_loaded)
@@ -162,19 +158,6 @@ class FileBrowserApp(QtWidgets.QMainWindow):
         # Update info dock contents (keep info visible)
         self._refresh_info_dock()
         self._refresh_observer_log()
-        # Condensed terminal output: only dims line
-        try:
-            shape = getattr(data, 'shape', None)
-            if isinstance(shape, tuple):
-                ndim = len(shape)
-                try:
-                    labels = list(DEFAULT_AXIS_ORDERS[ndim])
-                except KeyError:
-                    labels = [f"dim{i}" for i in range(ndim)]
-                dims_str = ", ".join(f"{label}={shape[i]}" for i, label in enumerate(labels))
-                print(f"Loaded array dims: {dims_str}")
-        except Exception:
-            pass
         # Display via main viewer only if 'Display' toggle is enabled
         try:
             display_enabled = True
@@ -212,6 +195,31 @@ class FileBrowserApp(QtWidgets.QMainWindow):
             except Exception:
                 html = "<i>Failed to format info.</i>"
             self.info_view.setHtml(html)
+
+    def _derive_observer_base_dir(self, directory: str) -> str:
+        """Return the observer-log base directory for a browser directory.
+
+        Strips a trailing must_be_in_directory leaf (e.g. 'reduced') so the
+        observer log uses the parent directory. Returns an empty string if the
+        input is empty.
+        """
+        if not directory:
+            return ""
+        base_dir = os.path.abspath(os.path.expanduser(directory))
+        must_dir = getattr(self.file_lister, 'must_be_in_directory', None)
+        if must_dir:
+            parent, leaf = os.path.split(base_dir.rstrip(os.sep))
+            if leaf == must_dir and parent:
+                base_dir = parent
+        return base_dir
+
+    @QtCore.pyqtSlot(str)
+    def _on_browser_directory_changed(self, directory: str):
+        """Refresh the observer log when the file browser navigates to a new dir."""
+        base_dir = self._derive_observer_base_dir(directory)
+        if base_dir and os.path.isdir(base_dir):
+            self.observer_dir_edit.setText(base_dir)
+            self._load_observer_log_from_dir(base_dir)
 
     def _refresh_observer_log(self):
         """Refresh observer log based on current data file and directory field.

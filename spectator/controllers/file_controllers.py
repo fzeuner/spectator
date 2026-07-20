@@ -177,6 +177,8 @@ class FileListingController(QtWidgets.QWidget):
     fileSelected = QtCore.pyqtSignal(str)  # file_path
     # Signal emitted when user requests an Info dock
     infoRequested = QtCore.pyqtSignal()
+    # Signal emitted when the user navigates to a new directory
+    directoryChanged = QtCore.pyqtSignal(str)  # directory_path
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -212,6 +214,14 @@ class FileListingController(QtWidgets.QWidget):
         except Exception:
             pass
 
+    def _emit_directory_changed(self, path: str):
+        """Notify listeners that the current directory changed."""
+        try:
+            if path:
+                self.directoryChanged.emit(path)
+        except Exception:
+            pass
+
     @QtCore.pyqtSlot()
     def _on_directory_entered(self):
         """Handle manual edits of the current directory path."""
@@ -223,6 +233,7 @@ class FileListingController(QtWidgets.QWidget):
             try:
                 self._populate_from_paths([path])
                 self.directory = [path]
+                self._emit_directory_changed(path)
             except Exception:
                 pass
     
@@ -331,6 +342,7 @@ class FileListingController(QtWidgets.QWidget):
                     self._populate_from_paths([chosen_dir])
                     self._listing_mode = 'files'
                     self.directory = [chosen_dir]
+                    self._emit_directory_changed(chosen_dir)
         
         except (ValueError, IndexError) as e:
             pass
@@ -380,6 +392,7 @@ class FileListingController(QtWidgets.QWidget):
                 # Otherwise, attempt to list files under the chosen directory; if none, show its subdirectories
                 self._populate_from_paths(selected)
             self.directory = selected
+            self._emit_directory_changed(self.directory[0] if self.directory else '')
         
         dialog.deleteLater()
 

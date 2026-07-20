@@ -52,7 +52,7 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         STOKES_NAMES = state_names
 
     # --- Widgets ---
-    control_widget = PlotControlWidget()
+    control_widget = PlotControlWidget(has_spatial_y=True)
 
     scan_images: List[Any] = []
     spectra: List[Any] = []
@@ -358,6 +358,31 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
             image_spectra_y[i].crosshairMoved.connect(
                 lambda spectral_pos, spatial_pos, idx=i: spectra[idx].update_spectrum_data_y(int(np.clip(np.round(spatial_pos), 0, image_spectra_y[idx].data.shape[1] - 1)), image_spectra_y[idx].data) if idx < len(spectra) else None
             )
+
+            # Connect spatial_y averaging region to spectrum window (pass current y-slice data)
+            image_spectra_y[i].spatialYAvgRegionChanged.connect(
+                lambda y_low, y_center, y_high, stokes_index, idx=i, win=image_spectra_y[i]: spectra[idx].handle_spatial_y_avg_line_movement(y_low, y_center, y_high, win.data)
+            )
+            control_widget.lines_content_widget.toggleSpatialYRemove.connect(spectra[i].clear_spatial_y_averaging)
+
+        # Synchronize spatial_y averaging regions across all y-image windows when enabled
+        image_spectra_y[i].spatialYAvgRegionChanged.connect(
+            lambda y_low, y_center, y_high, source_stokes_index, src=i, win=image_spectra_y[i]:
+                [
+                    (
+                        image_spectra_y[j].sync_spatial_y_averaging_lines(y_low, y_center, y_high, source_stokes_index),
+                        spectra[j].handle_spatial_y_avg_line_movement(y_low, y_center, y_high, image_spectra_y[j].data)
+                    )
+                    for j in range(len(image_spectra_y))
+                    if j != source_stokes_index and j < len(spectra) and getattr(control_widget, 'sync_spatial_y', False) and image_spectra_y[j].spatial_y_manager.has_lines()
+                ] and None
+        )
+
+        control_widget.lines_content_widget.createDefaultSpatialYAveraging.connect(image_spectra_y[i].create_default_spatial_y_averaging)
+        control_widget.lines_content_widget.toggleSpatialYRemove.connect(image_spectra_y[i].remove_spatial_y_averaging)
+        control_widget.lines_content_widget.spatialYAveragingEnabled.connect(image_spectra_y[i].set_spatial_y_averaging_enabled)
+
+        image_spectra_y[i].control_widget = control_widget.lines_content_widget
 
         if i < len(spectra):
             image_spectra_x[i].viewRangeChanged.connect(

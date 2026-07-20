@@ -15,6 +15,28 @@ import os
 # UI configuration constants
 MIN_LINE_DISTANCE = 2.0  # Minimum pixel distance between averaging lines
 
+# Default crosshair colors
+_DEFAULT_CROSSHAIR_COLORS = {
+    'v': 'white',
+    'h_image': 'dodgerblue',
+    'h_spectrum_image': 'white'
+}
+
+# Default averaging colors (legacy list; use ColorSchemes for keyed colors)
+_DEFAULT_AVERAGING_COLORS = ['dodgerblue', 'yellow']
+
+def get_default_crosshair_colors() -> Dict[str, str]:
+    """Get default crosshair colors."""
+    return _DEFAULT_CROSSHAIR_COLORS.copy()
+
+def get_default_averaging_colors() -> list:
+    """Get default averaging colors."""
+    return _DEFAULT_AVERAGING_COLORS.copy()
+
+def get_default_min_line_distance() -> float:
+    """Get default minimum line distance."""
+    return MIN_LINE_DISTANCE
+
 # Default data generation parameters
 DEFAULT_N_STOKES = 4
 DEFAULT_N_WL = 250
@@ -95,8 +117,9 @@ class ColorSchemes:
         'accent': '#375A7F',
         'crosshair': 'white',
         'draggable_line': 'orange',
-        'averaging_h': 'dodgerblue',
-        'averaging_v': 'yellow'
+        'averaging_spatial_x': 'dodgerblue',
+        'averaging_v': 'yellow',
+        'averaging_spatial_y': '#2ecc71'
     }
     
     LIGHT_THEME = {
@@ -105,8 +128,9 @@ class ColorSchemes:
         'accent': '#0078D4',
         'crosshair': 'black',
         'draggable_line': 'black',
-        'averaging_h': 'blue',
-        'averaging_v': 'orange'
+        'averaging_spatial_x': 'blue',
+        'averaging_v': 'orange',
+        'averaging_spatial_y': '#27ae60'
     }
 
 # Gray color palette (from existing getWidgetColors.py)
@@ -172,5 +196,8 @@ __all__ = [
     'DEFAULT_WINDOW_PERCENT',
     'MIN_WINDOW_SIZE',
     'DEFAULT_WINDOW_FALLBACK',
-    'get_initial_window_size'
+    'get_initial_window_size',
+    'get_default_crosshair_colors',
+    'get_default_averaging_colors',
+    'get_default_min_line_distance'
 ]

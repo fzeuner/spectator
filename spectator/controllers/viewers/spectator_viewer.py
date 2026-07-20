@@ -52,7 +52,7 @@ def spectator(data: np.ndarray, title: str = 'spectator', state_names: List[str]
         STOKES_NAMES = state_names
     
     # --- Widget Initialization ---
-    control_widget = PlotControlWidget() # Create control widget first
+    control_widget = PlotControlWidget(spatial_label=spatial_label) # Create control widget first
         
     # External callers can invoke update_spectator_data(...) programmatically
     spectra: List[Any] = []

@@ -18,19 +18,28 @@ class LinesControlGroup(QtWidgets.QWidget):
     toggleCrosshairSync = QtCore.pyqtSignal(bool)
     toggleAvgXSync = QtCore.pyqtSignal(bool)
     toggleAvgYSync = QtCore.pyqtSignal(bool)
+    toggleSpatialYSync = QtCore.pyqtSignal(bool)
     spectralAveragingEnabled = QtCore.pyqtSignal(bool)  # New signal for spectral averaging control
+    spatialYAveragingEnabled = QtCore.pyqtSignal(bool)  # Signal for spatial_y averaging mode
     toggleAvgXRemove = QtCore.pyqtSignal(bool)
     toggleAvgYRemove = QtCore.pyqtSignal(bool)
+    toggleSpatialYRemove = QtCore.pyqtSignal(bool)
     createDefaultSpectralAveraging = QtCore.pyqtSignal()  # Signal to create default spectral averaging
     createDefaultSpatialAveraging = QtCore.pyqtSignal()   # Signal to create default spatial averaging
+    createDefaultSpatialYAveraging = QtCore.pyqtSignal()  # Signal to create default spatial_y averaging
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None, spatial_label: str = "x", has_spatial_y: bool = False):
         super().__init__(parent)
         # This layout will hold your QGroupBoxes
         self.main_v_layout = QtWidgets.QVBoxLayout(self) # Set the layout directly on self
         # Track how many regions exist across all states
         self.spectral_regions = 0
         self.spatial_regions = 0
+        self.spatial_y_regions = 0
+        # Label for the spatial averaging direction (e.g. "x" or "y")
+        self.spatial_label = spatial_label
+        self.has_spatial_y = has_spatial_y
+        self._spatial_button_text = "<spatial_{}>".format(self.spatial_label)
 
         # QGroupBox for Synchronization buttons
         self.synchronize_box = QtWidgets.QGroupBox("Synchronize")
@@ -41,11 +50,18 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.sync_button.clicked.connect(self._on_toggle_crosshair_sync) # Connect to internal handler
         sync_box_layout.addWidget(self.sync_button)
 
-        self.sync_button_y_avg = QtWidgets.QPushButton("<spatial>")
+        self.sync_button_y_avg = QtWidgets.QPushButton(self._spatial_button_text)
         self.sync_button_y_avg.setCheckable(True)
         self.sync_button_y_avg.clicked.connect(self._handle_avg_y_sync_toggle) # Connect to internal handler
         self.sync_button_y_avg.setEnabled(False)  # Only enabled when any spatial region exists
         sync_box_layout.addWidget(self.sync_button_y_avg)
+
+        if self.has_spatial_y:
+            self.sync_button_y2_avg = QtWidgets.QPushButton("<spatial_y>")
+            self.sync_button_y2_avg.setCheckable(True)
+            self.sync_button_y2_avg.clicked.connect(self._on_toggle_spatial_y_sync)
+            self.sync_button_y2_avg.setEnabled(False)
+            sync_box_layout.addWidget(self.sync_button_y2_avg)
 
         self.sync_button_x_avg = QtWidgets.QPushButton("<spectral>")
         self.sync_button_x_avg.setCheckable(True)
@@ -82,19 +98,34 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.radio_spatial.setChecked(True)  # Default to spatial averaging
         self.avg_type_group.addButton(self.radio_spatial, 1)  # ID 1 for spatial
         
-        self.button_remove_y_avg = QtWidgets.QPushButton("<spatial>")
+        self.button_remove_y_avg = QtWidgets.QPushButton(self._spatial_button_text)
         self.button_remove_y_avg.setCheckable(True)
         self.button_remove_y_avg.clicked.connect(self._on_toggle_avg_y_remove) # Connect to internal handler
         
         spatial_row_layout.addWidget(self.radio_spatial)
         spatial_row_layout.addWidget(self.button_remove_y_avg, 1)  # Stretch factor 1 to fill width
         avg_lines_box_layout.addLayout(spatial_row_layout)
+
+        # Spatial_y row: only for scan viewer (radio + button)
+        if self.has_spatial_y:
+            spatial_y_row_layout = QtWidgets.QHBoxLayout()
+            self.radio_spatial_y = QtWidgets.QRadioButton()
+            self.avg_type_group.addButton(self.radio_spatial_y, 2)  # ID 2 for spatial_y
+
+            self.button_remove_y2_avg = QtWidgets.QPushButton("<spatial_y>")
+            self.button_remove_y2_avg.setCheckable(True)
+            self.button_remove_y2_avg.clicked.connect(self._on_toggle_spatial_y_remove)
+
+            spatial_y_row_layout.addWidget(self.radio_spatial_y)
+            spatial_y_row_layout.addWidget(self.button_remove_y2_avg, 1)
+            avg_lines_box_layout.addLayout(spatial_y_row_layout)
         
         # Connect radio button group signal
         self.avg_type_group.buttonClicked.connect(self._on_avg_type_changed)
         
         # Emit initial state (spatial is default)
         self.spectralAveragingEnabled.emit(False)
+        self.spatialYAveragingEnabled.emit(False)
         
         self.main_v_layout.addWidget(self.avg_lines_box)
 
@@ -117,6 +148,13 @@ class LinesControlGroup(QtWidgets.QWidget):
         """Handle the avg Y sync toggle."""
         self.toggleAvgYSync.emit(checked)
         self.sync_button_y_avg.setStyleSheet("background-color: red;" if checked else "")
+
+    @QtCore.pyqtSlot(bool)
+    def _on_toggle_spatial_y_sync(self, checked: bool):
+        """Handle the spatial_y sync toggle."""
+        self.toggleSpatialYSync.emit(checked)
+        if self.has_spatial_y:
+            self.sync_button_y2_avg.setStyleSheet("background-color: red;" if checked else "")
 
     @QtCore.pyqtSlot(bool)
     def _handle_sync_zoom_toggle(self, checked: bool):
@@ -149,6 +187,16 @@ class LinesControlGroup(QtWidgets.QWidget):
             self.button_remove_y_avg.setStyleSheet("background-color: red;" if checked else "")
             # Clear the auto_activated flag
             self.button_remove_y_avg.setProperty('auto_activated', False)
+
+    @QtCore.pyqtSlot(bool)
+    def _on_toggle_spatial_y_remove(self, checked: bool):
+        if checked:
+            if not self.button_remove_y2_avg.property('auto_activated'):
+                self.createDefaultSpatialYAveraging.emit()
+        else:
+            self.toggleSpatialYRemove.emit(checked)
+        self.button_remove_y2_avg.setStyleSheet("background-color: red;" if checked else "")
+        self.button_remove_y2_avg.setProperty('auto_activated', False)
     
     def activate_spectral_button(self):
         """Activate spectral averaging button when averaging is added."""
@@ -164,6 +212,14 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.button_remove_y_avg.setStyleSheet("background-color: red;")
         self.button_remove_y_avg.setEnabled(True)
 
+    def activate_spatial_y_button(self):
+        """Activate spatial_y averaging button when averaging is added."""
+        if self.has_spatial_y:
+            self.button_remove_y2_avg.setProperty('auto_activated', True)
+            self.button_remove_y2_avg.setChecked(True)
+            self.button_remove_y2_avg.setStyleSheet("background-color: red;")
+            self.button_remove_y2_avg.setEnabled(True)
+
     def deactivate_spectral_button(self):
         """Deactivate spectral averaging button when no region exists."""
         self.button_remove_x_avg.setChecked(False)
@@ -175,14 +231,25 @@ class LinesControlGroup(QtWidgets.QWidget):
         self.button_remove_y_avg.setChecked(False)
         self.button_remove_y_avg.setStyleSheet("")
         # Keep enabled so users can recreate regions
+
+    def deactivate_spatial_y_button(self):
+        """Deactivate spatial_y averaging button when no region exists."""
+        if self.has_spatial_y:
+            self.button_remove_y2_avg.setChecked(False)
+            self.button_remove_y2_avg.setStyleSheet("")
     
     def _on_avg_type_changed(self, button):
         """Handle radio button selection change for averaging type."""
         button_id = self.avg_type_group.id(button)
         if button_id == 0:  # Spectral selected
             self.spectralAveragingEnabled.emit(True)  # Enable spectral averaging
+            self.spatialYAveragingEnabled.emit(False)
         elif button_id == 1:  # Spatial selected
             self.spectralAveragingEnabled.emit(False)  # Disable spectral averaging
+            self.spatialYAveragingEnabled.emit(False)
+        elif button_id == 2:  # Spatial_y selected
+            self.spectralAveragingEnabled.emit(False)
+            self.spatialYAveragingEnabled.emit(True)
 
     # Methods to update button states externally
     def set_crosshair_sync_state(self, checked: bool):
@@ -196,6 +263,11 @@ class LinesControlGroup(QtWidgets.QWidget):
     def set_avg_y_sync_state(self, checked: bool):
         self.sync_button_y_avg.setChecked(checked)
         self.sync_button_y_avg.setStyleSheet("background-color: red;" if checked else "")
+
+    def set_spatial_y_sync_state(self, checked: bool):
+        if self.has_spatial_y:
+            self.sync_button_y2_avg.setChecked(checked)
+            self.sync_button_y2_avg.setStyleSheet("background-color: red;" if checked else "")
 
     # Notification methods from windows to control sync button availability
     def notify_spectral_region_added(self):
@@ -230,3 +302,23 @@ class LinesControlGroup(QtWidgets.QWidget):
                 self.sync_button_y_avg.setChecked(False)
                 self.sync_button_y_avg.setStyleSheet("")
                 self.sync_button_y_avg.setEnabled(False)
+
+    def notify_spatial_y_region_added(self):
+        if self.has_spatial_y:
+            if self.spatial_y_regions == 0:
+                self.button_remove_y2_avg.setEnabled(True)
+                self.sync_button_y2_avg.setEnabled(True)
+            self.spatial_y_regions += 1
+
+    def notify_spatial_y_region_removed(self):
+        if self.has_spatial_y and self.spatial_y_regions > 0:
+            self.spatial_y_regions -= 1
+            if self.spatial_y_regions == 0:
+                if self.sync_button_y2_avg.isChecked():
+                    self.toggleSpatialYSync.emit(False)
+                self.sync_button_y2_avg.setChecked(False)
+                self.sync_button_y2_avg.setStyleSheet("")
+                self.sync_button_y2_avg.setEnabled(False)
+                self.button_remove_y2_avg.setChecked(False)
+                self.button_remove_y2_avg.setStyleSheet("")
+                self.button_remove_y2_avg.setEnabled(False)

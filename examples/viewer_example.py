@@ -16,7 +16,7 @@ if __name__ == '__main__':
     print("   Command: display_data(data, order=['states', 'spectral', 'spatial_x'], title='Example', state_names=['I','Q','U','V'])")
     result = display_data(
         data_3d,
-        order=['states', 'spectral', 'spatial_x'],
+        order=['states', 'spectral', 'spatial_y'],
         title='Example',
         state_names=['I','Q','U','V'],
     )

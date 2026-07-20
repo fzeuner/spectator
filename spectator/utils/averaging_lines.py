@@ -36,7 +36,7 @@ class AveragingLineManager(QtCore.QObject):
             orientation: 'vertical' for spectral (90°) or 'horizontal' for spatial (0°)
             data_range: Maximum data range (n_spectral or n_x_pixel)
             stokes_index: Stokes parameter index for signal emission
-            color_key: Color key for getWidgetColors() (e.g., 'averaging_v', 'averaging_h')
+            color_key: Color key for getWidgetColors() (e.g., 'averaging_v', 'averaging_spatial_x')
             label_widget: Optional label widget to update with positions
         """
         super().__init__()
@@ -56,7 +56,7 @@ class AveragingLineManager(QtCore.QObject):
         # Configuration
         self.angle = 90 if orientation == 'vertical' else 0
         self.axis_name = 'λ' if orientation == 'vertical' else 'x'
-        self.label_terms = ('left', 'center', 'right') if orientation == 'vertical' else ('lower', 'center', 'upper')
+        self.label_terms = ('l', 'c', 'r') if orientation == 'vertical' else ('l', 'c', 'u')
         
         # Optional callbacks to integrate with UI controllers
         # These can be set by the window to handle UI activation/notifications
@@ -230,12 +230,7 @@ class AveragingLineManager(QtCore.QObject):
         """Update the optional label widget with current positions."""
         if not self.label_widget:
             return
-        # vertical (spectral): left/center/right -> l/c/r
-        # horizontal (spatial): lower/center/upper -> l/c/u
-        if self.orientation == 'vertical':
-            t1, t2, t3 = 'l', 'c', 'r'
-        else:
-            t1, t2, t3 = 'l', 'c', 'u'
+        t1, t2, t3 = self.label_terms
         try:
             self.label_widget.setText(
                 f"{t1}: {pos1:.0f}, {t2}: {center:.0f}, {t3}: {pos2:.0f}",

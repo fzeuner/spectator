@@ -27,15 +27,18 @@ class PlotControlWidget(QtWidgets.QWidget):
     resetSpatialRangeRequested = QtCore.pyqtSignal()
     syncZoomToggled = QtCore.pyqtSignal(bool)  # Emit sync zoom state
 
-    def __init__(self):
+    def __init__(self, spatial_label: str = "x", has_spatial_y: bool = False):
         super().__init__(None)
 
+        self.spatial_label = spatial_label
+        self.has_spatial_y = has_spatial_y
         self.main_layout = QtWidgets.QVBoxLayout(self)
         
         # Initialize synchronization state
         self.sync_crosshair = False
         self.sync_avg_x = False
         self.sync_avg_y = False
+        self.sync_spatial_y = False
         self.sync_zoom = False
         
         # Widget collections (set by external controller)
@@ -94,13 +97,14 @@ class PlotControlWidget(QtWidgets.QWidget):
         self.limits_layout.addWidget(self.z_limits_group)
 
         # --- Widgets for the "lines" dock ---
-        self.lines_content_widget = LinesControlGroup(self) # Instance of LinesControlGroup
+        self.lines_content_widget = LinesControlGroup(self, spatial_label=self.spatial_label, has_spatial_y=self.has_spatial_y) # Instance of LinesControlGroup
         self.lines_dock.addWidget(self.lines_content_widget)
 
         # Connect the signals from LinesControlGroup to PlotControlWidget's methods
         self.lines_content_widget.toggleCrosshairSync.connect(self._handle_crosshair_sync_toggle)
         self.lines_content_widget.toggleAvgXSync.connect(self._handle_avg_x_sync_toggle)
         self.lines_content_widget.toggleAvgYSync.connect(self._handle_avg_y_sync_toggle)
+        self.lines_content_widget.toggleSpatialYSync.connect(self._handle_spatial_y_sync_toggle)
         
         # Note: Conditional signal connection - may be unused code
     
@@ -140,6 +144,11 @@ class PlotControlWidget(QtWidgets.QWidget):
     def _handle_avg_y_sync_toggle(self, checked: bool):
         """Slot to receive and handle the spatial average sync toggle state."""
         self._handle_sync_toggle('avg_y', checked)
+
+    @QtCore.pyqtSlot(bool)
+    def _handle_spatial_y_sync_toggle(self, checked: bool):
+        """Slot to receive and handle the spatial_y average sync toggle state."""
+        self.sync_spatial_y = checked
     
     @QtCore.pyqtSlot(float, float, float, int)
     def handle_spectral_avg_line_movement(self, left_pos: float, center_pos: float, right_pos: float, source_stokes_index: int):

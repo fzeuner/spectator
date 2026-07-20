@@ -15,7 +15,7 @@ def get_widget_colors(theme: str = 'dark') -> Dict[str, str]:
         'dark': ColorSchemes.DARK_THEME,
         'light': ColorSchemes.LIGHT_THEME
     }
-    return color_schemes.get(theme, color_schemes['dark'])
+    return color_schemes.get(theme, color_schemes['dark']).copy()
 
 def getWidgetColors(theme: str = 'dark') -> Dict[str, str]:
     """Get widget colors for the specified theme."""

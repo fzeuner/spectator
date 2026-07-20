@@ -231,6 +231,7 @@ class BasePlotWidget(QtWidgets.QWidget):
         # Configure right axis label
         right_axis = self.plotItem.getAxis('right')
         right_axis.setLabel(text=right_label, units=right_units)
+        right_axis.enableAutoSIPrefix(False)
     
     def setup_viewbox_limits(self, x_max: float, y_max: float, 
                            min_range: float = 1.0, enable_rect_zoom: bool = False):
