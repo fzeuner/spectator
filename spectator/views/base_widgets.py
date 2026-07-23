@@ -12,7 +12,7 @@ from typing import Optional
 import warnings
 
 # Import our models for configuration
-from ..models import get_default_crosshair_colors, get_default_averaging_colors, get_default_min_line_distance
+from ..models import get_default_min_line_distance
 from ..utils.colors import getWidgetColors
 
 
@@ -109,8 +109,6 @@ class BasePlotWidget(QtWidgets.QWidget):
     
     def _setup_default_colors(self):
         """Setup default color schemes from models."""
-        self.crosshair_colors = get_default_crosshair_colors()
-        self.avg_colors = get_default_averaging_colors()
         self.min_line_distance = get_default_min_line_distance()
     
     def update_label(self, text: str):

@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 from typing import Tuple, Optional
 
-from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, TICK_FONT, ColorSchemes, HOVER_COLOR_AVERAGING, HOVER_COLOR_DEFAULT
+from .constants import DEFAULT_LINE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_LABEL_SIZE, TICK_FONT, ColorSchemes
 from .colors import getWidgetColors
 
 SOLID_LINE = QtCore.Qt.PenStyle.SolidLine
@@ -59,12 +59,11 @@ def add_line(plot_item: pg.PlotItem,
     
     # Set custom hover pen based on line type
     if moveable:
+        colors = getWidgetColors()
         if is_averaging_line and style == SOLID_LINE:
-            # Orange hover for solid averaging lines only
-            hover_pen = pg.mkPen(color=HOVER_COLOR_AVERAGING, width=DEFAULT_LINE_WIDTH + 1, style=style)
+            hover_pen = pg.mkPen(color=colors.get('hover_averaging', 'orange'), width=DEFAULT_LINE_WIDTH + 1, style=style)
         else:
-            # Red hover for other moveable lines (default PyQtGraph behavior)
-            hover_pen = pg.mkPen(color=HOVER_COLOR_DEFAULT, width=DEFAULT_LINE_WIDTH + 1, style=style)
+            hover_pen = pg.mkPen(color=colors.get('hover_default', 'red'), width=DEFAULT_LINE_WIDTH + 1, style=style)
         line.setHoverPen(hover_pen)
     
     plot_item.addItem(line, ignoreBounds=True)

@@ -15,24 +15,6 @@ import os
 # UI configuration constants
 MIN_LINE_DISTANCE = 2.0  # Minimum pixel distance between averaging lines
 
-# Default crosshair colors
-_DEFAULT_CROSSHAIR_COLORS = {
-    'v': 'white',
-    'h_image': 'dodgerblue',
-    'h_spectrum_image': 'white'
-}
-
-# Default averaging colors (legacy list; use ColorSchemes for keyed colors)
-_DEFAULT_AVERAGING_COLORS = ['dodgerblue', 'yellow']
-
-def get_default_crosshair_colors() -> Dict[str, str]:
-    """Get default crosshair colors."""
-    return _DEFAULT_CROSSHAIR_COLORS.copy()
-
-def get_default_averaging_colors() -> list:
-    """Get default averaging colors."""
-    return _DEFAULT_AVERAGING_COLORS.copy()
-
 def get_default_min_line_distance() -> float:
     """Get default minimum line distance."""
     return MIN_LINE_DISTANCE
@@ -47,9 +29,6 @@ DEFAULT_N_X = 150
 DEFAULT_LINE_WIDTH = 1.8
 DEFAULT_CROSSHAIR_STYLE = 'DashLine'
 
-# Hover color constants
-HOVER_COLOR_AVERAGING = 'orange'  # Hover color for solid averaging lines
-HOVER_COLOR_DEFAULT = 'red'       # Default hover color for other moveable lines
 
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
@@ -119,7 +98,9 @@ class ColorSchemes:
         'draggable_line': 'orange',
         'averaging_spatial_x': 'dodgerblue',
         'averaging_v': 'yellow',
-        'averaging_spatial_y': '#2ecc71'
+        'averaging_spatial_y': '#2ecc71',
+        'hover_averaging': 'orange',
+        'hover_default': 'red'
     }
     
     LIGHT_THEME = {
@@ -130,7 +111,9 @@ class ColorSchemes:
         'draggable_line': 'black',
         'averaging_spatial_x': 'blue',
         'averaging_v': 'orange',
-        'averaging_spatial_y': '#27ae60'
+        'averaging_spatial_y': '#27ae60',
+        'hover_averaging': 'orange',
+        'hover_default': 'red'
     }
 
 # Gray color palette (from existing getWidgetColors.py)
@@ -181,8 +164,6 @@ __all__ = [
     'DEFAULT_N_X',
     'DEFAULT_LINE_WIDTH',
     'DEFAULT_CROSSHAIR_STYLE',
-    'HOVER_COLOR_AVERAGING',
-    'HOVER_COLOR_DEFAULT',
     'DEFAULT_FONT_SIZE',
     'DEFAULT_LABEL_SIZE',
     'DEFAULT_TICK_FONT_SIZE',
@@ -197,7 +178,5 @@ __all__ = [
     'MIN_WINDOW_SIZE',
     'DEFAULT_WINDOW_FALLBACK',
     'get_initial_window_size',
-    'get_default_crosshair_colors',
-    'get_default_averaging_colors',
     'get_default_min_line_distance'
 ]
