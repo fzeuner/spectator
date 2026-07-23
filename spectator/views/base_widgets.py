@@ -13,6 +13,7 @@ import warnings
 
 # Import our models for configuration
 from ..models import get_default_min_line_distance
+from ..utils.constants import DEFAULT_LABEL_SIZE
 from ..utils.colors import getWidgetColors
 
 
@@ -95,7 +96,7 @@ class BasePlotWidget(QtWidgets.QWidget):
         self.setLayout(self.layout)
         
         # Setup label
-        self.label = pg.LabelItem(justify='left', size='6pt')
+        self.label = pg.LabelItem(justify='left', size=DEFAULT_LABEL_SIZE)
         self.graphics_widget.addItem(self.label, row=1, col=0)
         
         # State tracking
@@ -118,7 +119,7 @@ class BasePlotWidget(QtWidgets.QWidget):
         Args:
             text: New label text
         """
-        self.label.setText(text, size='6pt')
+        self.label.setText(text, size=DEFAULT_LABEL_SIZE)
     
     def set_plot_title(self, title: str):
         """

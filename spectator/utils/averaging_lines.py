@@ -9,6 +9,7 @@ import numpy as np
 import pyqtgraph as pg
 from typing import Optional, Tuple, Callable
 from .colors import getWidgetColors
+from .constants import DEFAULT_LABEL_SIZE
 from pyqtgraph.Qt import QtCore
 from .plotting import add_line, SOLID_LINE, DOT_LINE, DASH_LINE
 
@@ -234,7 +235,7 @@ class AveragingLineManager(QtCore.QObject):
         try:
             self.label_widget.setText(
                 f"{t1}: {pos1:.0f}, {t2}: {center:.0f}, {t3}: {pos2:.0f}",
-                size='8pt'
+                size=DEFAULT_LABEL_SIZE
             )
         except Exception:
             # Be tolerant if label widget is missing features

@@ -13,7 +13,7 @@ import os
 # Colors for averaging lines and regions (moved to color schemes)
 
 # UI configuration constants
-MIN_LINE_DISTANCE = 2.0  # Minimum pixel distance between averaging lines
+MIN_LINE_DISTANCE = 5.0  # Minimum pixel distance between averaging lines
 
 def get_default_min_line_distance() -> float:
     """Get default minimum line distance."""
@@ -32,7 +32,7 @@ DEFAULT_CROSSHAIR_STYLE = 'DashLine'
 
 # Font and sizing constants
 DEFAULT_FONT_SIZE = '6pt'
-DEFAULT_LABEL_SIZE = '8pt'
+DEFAULT_LABEL_SIZE = '7pt'
 DEFAULT_TICK_FONT_SIZE = 8  # Font size for axis tick labels
 
 # Import QtGui for font object

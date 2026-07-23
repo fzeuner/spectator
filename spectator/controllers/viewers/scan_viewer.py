@@ -339,6 +339,19 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         if i < len(spatial_y):
             image_spectra_x[i].crosshairMoved.connect(spatial_y[i].update_from_spectrum_image_crosshair)
 
+        # Cross-sync: spectral averaging in x image → sync to y image windows and update spatial_y
+        image_spectra_x[i].avgRegionChanged.connect(
+            lambda wl_low, wl_center, wl_high, source_stokes_index, src=i:
+                [
+                    (
+                        image_spectra_y[j].sync_spectral_averaging_lines(wl_low, wl_center, wl_high, source_stokes_index),
+                        spatial_y[j].handle_spectral_avg_line_movement(wl_low, wl_center, wl_high, source_stokes_index) if j < len(spatial_y) else None
+                    )
+                    for j in range(len(image_spectra_y))
+                    if j != source_stokes_index and getattr(control_widget, 'sync_avg_x', False) and image_spectra_y[j].spectral_manager.has_lines()
+                ] and None
+        )
+
     # Connect spectrum-image Y crosshair to spatial Y window (analogous to X connections above)
     for i in range(len(image_spectra_y)):
         if i < len(spatial_y):
@@ -381,6 +394,42 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
         control_widget.lines_content_widget.createDefaultSpatialYAveraging.connect(image_spectra_y[i].create_default_spatial_y_averaging)
         control_widget.lines_content_widget.toggleSpatialYRemove.connect(image_spectra_y[i].remove_spatial_y_averaging)
         control_widget.lines_content_widget.spatialYAveragingEnabled.connect(image_spectra_y[i].set_spatial_y_averaging_enabled)
+
+        # Spectral averaging connections for y image windows
+        control_widget.lines_content_widget.spectralAveragingEnabled.connect(image_spectra_y[i].set_spectral_averaging_enabled)
+        control_widget.lines_content_widget.createDefaultSpectralAveraging.connect(image_spectra_y[i].create_default_spectral_averaging)
+        control_widget.lines_content_widget.toggleAvgXRemove.connect(image_spectra_y[i].remove_spectral_averaging)
+
+        if i < len(spatial_y):
+            # Spectral averaging in y image → result plotted in spatial y window
+            image_spectra_y[i].spectralAvgRegionChanged.connect(spatial_y[i].handle_spectral_avg_line_movement)
+            control_widget.lines_content_widget.toggleAvgXRemove.connect(spatial_y[i].clear_averaging_regions)
+
+        # Synchronize spectral averaging regions across all y-image windows when enabled
+        image_spectra_y[i].spectralAvgRegionChanged.connect(
+            lambda wl_low, wl_center, wl_high, source_stokes_index, src=i:
+                [
+                    (
+                        image_spectra_y[j].sync_spectral_averaging_lines(wl_low, wl_center, wl_high, source_stokes_index),
+                        spatial_y[j].handle_spectral_avg_line_movement(wl_low, wl_center, wl_high, source_stokes_index) if j < len(spatial_y) else None
+                    )
+                    for j in range(len(image_spectra_y))
+                    if j != source_stokes_index and getattr(control_widget, 'sync_avg_x', False) and image_spectra_y[j].spectral_manager.has_lines()
+                ] and None
+        )
+
+        # Cross-sync: spectral averaging in y image → sync to x image windows and update spatial_x
+        image_spectra_y[i].spectralAvgRegionChanged.connect(
+            lambda wl_low, wl_center, wl_high, source_stokes_index, src=i:
+                [
+                    (
+                        image_spectra_x[j].sync_spectral_averaging_lines(wl_low, wl_center, wl_high, source_stokes_index),
+                        spatial_x[j].handle_spectral_avg_line_movement(wl_low, wl_center, wl_high, source_stokes_index) if j < len(spatial_x) else None
+                    )
+                    for j in range(len(image_spectra_x))
+                    if j != source_stokes_index and getattr(control_widget, 'sync_avg_x', False) and image_spectra_x[j].spectral_manager.has_lines()
+                ] and None
+        )
 
         image_spectra_y[i].control_widget = control_widget.lines_content_widget
 
