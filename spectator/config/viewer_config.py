@@ -11,6 +11,7 @@ from typing import Dict, Tuple, Sequence
 
 # Default axis ordering for display_data by data dimensionality.
 # Keys are data.ndim, values are tuples of axis labels in data order.
+# Only applied if no order is passed in display
 DEFAULT_AXIS_ORDERS: Dict[int, Tuple[str, ...]] = {
     1: ("spectral",),
     2: ("spectral", "spatial_x"),
@@ -30,6 +31,8 @@ VIEWER_SELECTION_RULES: Dict[Tuple[str, ...], str] = {
     ("states", "spectral", "spatial_y"): "spectator",
     # 4D scan viewer: states, spectral, spatial_y, spatial_x
     ("states", "spatial_y", "spectral", "spatial_x"): "scan_viewer",
+    # 3D scan viewer (single state, no states axis): spatial_y, spectral, spatial_x
+    ("spatial_y", "spectral", "spatial_x"): "scan_viewer",
 }
 
 __all__ = [

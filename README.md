@@ -135,6 +135,7 @@ viewer = display_data(
 |--------|------------|-------------|
 | `spectator_viewer` | 3D (states, spectral, spatial_x or spatial_y) | Standard spectropolarimetric viewer with synchronized spectra and spatial windows |
 | `scan_viewer` | 4D (states, spectral, spatial_y, spatial_x) | Extended viewer which includes an additional window for an image with two spatial dimensions |
+| `scan_viewer` | 3D (spatial_y, spectral, spatial_x) | Single-state scan viewer (no states axis); data is expanded with a dummy state |
 
 More viewers for 2D and 5D data are planned.
 
@@ -148,6 +149,7 @@ More viewers for 2D and 5D data are planned.
 ```bash
 uv run python examples/viewer_example.py        # 3D: states × spectral × spatial
 uv run python examples/scan_viewer_example.py   # 4D: + spatial_y
+uv run python examples/scan_viewer_themis_1state.py  # 3D: single-state scan viewer
 uv run python examples/z3showred_example.py     # ZIMPOL file browser
 ```
 

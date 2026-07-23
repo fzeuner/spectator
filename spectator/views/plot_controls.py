@@ -25,6 +25,8 @@ class PlotControlWidget(QtWidgets.QWidget):
     resetXlamRangeRequested = QtCore.pyqtSignal()
     spatialRangeChanged = QtCore.pyqtSignal(float, float)  # Emit (min, max)
     resetSpatialRangeRequested = QtCore.pyqtSignal()
+    spatialYRangeChanged = QtCore.pyqtSignal(float, float)  # Emit (min, max) for y axis
+    resetSpatialYRangeRequested = QtCore.pyqtSignal()
     syncZoomToggled = QtCore.pyqtSignal(bool)  # Emit sync zoom state
 
     def __init__(self, spatial_label: str = "x", has_spatial_y: bool = False):
@@ -45,6 +47,8 @@ class PlotControlWidget(QtWidgets.QWidget):
         self.spectrum_image_widgets = []
         self.spectra_widgets = []
         self.spatial_widgets = []
+        self.spectrum_image_y_widgets = []
+        self.scan_image_widgets = []
         
         # Initialize synchronization manager
         self.sync_manager = SynchronizationManager(self)
@@ -84,6 +88,8 @@ class PlotControlWidget(QtWidgets.QWidget):
         # Add lambda and x sub-groups into the parent
         self._init_wavelength_range_controls(axis_limits_layout)
         self._init_spatial_range_controls(axis_limits_layout)
+        if self.has_spatial_y:
+            self._init_spatial_y_range_controls(axis_limits_layout)
         
         # Add sync zoom button
         self._init_sync_zoom_button(axis_limits_layout)
@@ -108,11 +114,14 @@ class PlotControlWidget(QtWidgets.QWidget):
         
         # Note: Conditional signal connection - may be unused code
     
-    def set_widget_collections(self, spectrum_image_widgets: list, spectra_widgets: list, spatial_widgets: list):
+    def set_widget_collections(self, spectrum_image_widgets: list, spectra_widgets: list, spatial_widgets: list,
+                              spectrum_image_y_widgets: Optional[list] = None, scan_image_widgets: Optional[list] = None):
         """Update widget collections for synchronization."""
         self.spectrum_image_widgets = spectrum_image_widgets
         self.spectra_widgets = spectra_widgets
         self.spatial_widgets = spatial_widgets
+        self.spectrum_image_y_widgets = spectrum_image_y_widgets or []
+        self.scan_image_widgets = scan_image_widgets or []
         self.sync_manager.set_widget_collections(spectrum_image_widgets, spectra_widgets, spatial_widgets)
     
     def _handle_sync_toggle(self, sync_type: str, checked: bool):
@@ -167,130 +176,125 @@ class PlotControlWidget(QtWidgets.QWidget):
     
     @QtCore.pyqtSlot()
     def _handle_reset_button(self):
-        """Handle reset button - reset both lambda and x axis limits simultaneously."""
+        """Handle reset button - reset all axis limits simultaneously."""
         self.resetXlamRangeRequested.emit()
         self.resetSpatialRangeRequested.emit()
+        if self.has_spatial_y:
+            self.resetSpatialYRangeRequested.emit()
+
+    # Zoom sync groups: (widgets_attr, x_dim_attr, y_dim_attr)
+    _ZOOM_GROUPS = [
+        ('spectrum_image_widgets', 'n_spectral', 'n_x_pixel'),
+        ('spectrum_image_y_widgets', 'n_spectral', 'n_y_pixel'),
+        ('scan_image_widgets', 'n_x', 'n_y'),
+    ]
+
+    def _all_zoom_windows(self):
+        return self.spectrum_image_widgets + self.spectrum_image_y_widgets + self.scan_image_widgets
 
     @QtCore.pyqtSlot(bool)
     def _handle_sync_zoom_toggle(self, checked: bool):
-        """Handle sync zoom toggle - synchronize view ranges across all SpectrumImageWindows."""
+        """Handle sync zoom toggle - synchronize view ranges across all image windows."""
         self.sync_zoom = checked
-        
-        # Update button styling
+
         if hasattr(self, 'sync_zoom_button'):
             self.sync_zoom_button.setStyleSheet("background-color: red;" if checked else "")
-        
+
         if checked:
-            # Reset all windows to full zoom when sync is activated
-            for window in self.spectrum_image_widgets:
+            for widgets_attr, x_dim, y_dim in self._ZOOM_GROUPS:
+                for window in getattr(self, widgets_attr):
+                    try:
+                        window.plotItem.setRange(
+                            xRange=(0, getattr(window, x_dim) - 1),
+                            yRange=(0, getattr(window, y_dim) - 1),
+                            padding=0)
+                    except Exception as e:
+                        print(f"Error resetting zoom: {e}")
+
+            for window in self._all_zoom_windows():
                 try:
-                    window.plotItem.setXRange(0, window.n_spectral - 1, padding=0)
-                    window.plotItem.setYRange(0, window.n_x_pixel - 1, padding=0)
-                except Exception as e:
-                    print(f"Error resetting zoom: {e}")
-            
-            # Connect viewRangeChanged signals for continuous sync
-            for window in self.spectrum_image_widgets:
-                try:
-                    if hasattr(window, 'plotItem') and hasattr(window.plotItem, 'vb'):
-                        window.plotItem.vb.sigRangeChanged.connect(self._on_zoom_sync_range_changed)
+                    window.plotItem.vb.sigRangeChanged.connect(self._on_zoom_sync_range_changed)
                 except Exception as e:
                     print(f"Error connecting zoom sync: {e}")
-            
-            # Initialize limit displays with current full zoom ranges
+
             if self.spectrum_image_widgets:
-                window = self.spectrum_image_widgets[0]
-                self._update_limit_displays_for_sync_zoom(0, window.n_spectral - 1, 0, window.n_x_pixel - 1)
+                w = self.spectrum_image_widgets[0]
+                self._update_limit_displays_for_sync_zoom(0, w.n_spectral - 1, 0, w.n_x_pixel - 1)
         else:
-            # Disconnect viewRangeChanged signals when sync is disabled
-            for window in self.spectrum_image_widgets:
+            for window in self._all_zoom_windows():
                 try:
-                    if hasattr(window, 'plotItem') and hasattr(window.plotItem, 'vb'):
-                        window.plotItem.vb.sigRangeChanged.disconnect(self._on_zoom_sync_range_changed)
-                except Exception as e:
-                    pass  # Ignore disconnect errors
-            
-            # Reset limit display styling to normal when sync is disabled
+                    window.plotItem.vb.sigRangeChanged.disconnect(self._on_zoom_sync_range_changed)
+                except Exception:
+                    pass
             self._reset_limit_display_styling()
     
+    def _sync_group_zoom(self, group, vb, x_min, x_max, y_min, y_max, x_only=False):
+        """Sync zoom to all windows in group except the source, blocking signals."""
+        for window in group:
+            try:
+                if window.plotItem.vb != vb:
+                    window.plotItem.vb.sigRangeChanged.disconnect(self._on_zoom_sync_range_changed)
+                    if x_only:
+                        window.plotItem.setXRange(x_min, x_max, padding=0)
+                    else:
+                        window.plotItem.setRange(xRange=(x_min, x_max), yRange=(y_min, y_max), padding=0)
+                    window.plotItem.vb.sigRangeChanged.connect(self._on_zoom_sync_range_changed)
+            except Exception as e:
+                print(f"Error syncing zoom: {e}")
+
     def _on_zoom_sync_range_changed(self, vb, ranges):
         """Handle zoom changes when sync zoom is active."""
-        if not hasattr(self, 'sync_zoom') or not self.sync_zoom:
+        if not getattr(self, 'sync_zoom', False):
             return
-            
+
         try:
-            x_range, y_range = ranges
-            x_min, x_max = x_range
-            y_min, y_max = y_range
-            
-            # Apply this range to all other SpectrumImageWindows
-            for window in self.spectrum_image_widgets:
-                try:
-                    if window.plotItem.vb != vb:  # Don't update the source window
-                        window.plotItem.vb.sigRangeChanged.disconnect(self._on_zoom_sync_range_changed)
-                        window.plotItem.setXRange(x_min, x_max, padding=0)
-                        window.plotItem.setYRange(y_min, y_max, padding=0)
-                        window.plotItem.vb.sigRangeChanged.connect(self._on_zoom_sync_range_changed)
-                except Exception as e:
-                    print(f"Error syncing zoom: {e}")
-            
-            # Update limit displays with current zoom ranges as grey text
+            x_min, x_max = ranges[0]
+            y_min, y_max = ranges[1]
+
+            # Determine source group
+            for widgets_attr, _, _ in self._ZOOM_GROUPS:
+                group = getattr(self, widgets_attr)
+                if any(w.plotItem.vb == vb for w in group):
+                    src_group = group
+                    src_is_scan = widgets_attr == 'scan_image_widgets'
+                    src_is_y = widgets_attr == 'spectrum_image_y_widgets'
+                    break
+            else:
+                return
+
+            # Sync within same group (full x+y)
+            self._sync_group_zoom(src_group, vb, x_min, x_max, y_min, y_max)
+
+            # Cross-group: sync spectral axis (x) between x and y image windows
+            if not src_is_scan:
+                cross = self.spectrum_image_y_widgets if not src_is_y else self.spectrum_image_widgets
+                self._sync_group_zoom(cross, vb, x_min, x_max, y_min, y_max, x_only=True)
+
             self._update_limit_displays_for_sync_zoom(x_min, x_max, y_min, y_max)
-                    
         except Exception as e:
             print(f"Error in zoom sync: {e}")
     
     def _update_limit_displays_for_sync_zoom(self, x_min, x_max, y_min, y_max):
-        """Update wavelength and x limit displays with current zoom ranges as grey text."""
-        try:
-            # Update wavelength (spectral) limit displays
-            if hasattr(self, 'wavelength_min_edit') and hasattr(self, 'wavelength_max_edit'):
-                self.wavelength_min_edit.blockSignals(True)
-                self.wavelength_max_edit.blockSignals(True)
-                self.wavelength_min_edit.setText(f"{x_min:.1f}")
-                self.wavelength_max_edit.setText(f"{x_max:.1f}")
-                self.wavelength_min_edit.setStyleSheet("color: grey;")
-                self.wavelength_max_edit.setStyleSheet("color: grey;")
-                # Mark as sync-updated to distinguish from manual entries
-                self.wavelength_min_edit.setProperty('sync_updated', True)
-                self.wavelength_max_edit.setProperty('sync_updated', True)
-                self.wavelength_min_edit.blockSignals(False)
-                self.wavelength_max_edit.blockSignals(False)
-            
-            # Update spatial (x pixel) limit displays  
-            if hasattr(self, 'spatial_min_edit') and hasattr(self, 'spatial_max_edit'):
-                self.spatial_min_edit.blockSignals(True)
-                self.spatial_max_edit.blockSignals(True)
-                self.spatial_min_edit.setText(f"{y_min:.1f}")
-                self.spatial_max_edit.setText(f"{y_max:.1f}")
-                self.spatial_min_edit.setStyleSheet("color: grey;")
-                self.spatial_max_edit.setStyleSheet("color: grey;")
-                # Mark as sync-updated to distinguish from manual entries
-                self.spatial_min_edit.setProperty('sync_updated', True)
-                self.spatial_max_edit.setProperty('sync_updated', True)
-                self.spatial_min_edit.blockSignals(False)
-                self.spatial_max_edit.blockSignals(False)
-        except Exception as e:
-            print(f"Error updating limit displays: {e}")
+        """Update limit displays with current zoom ranges as grey text."""
+        for prefix, val_min, val_max in [('wavelength', x_min, x_max), ('spatial', y_min, y_max)]:
+            min_edit = getattr(self, f'{prefix}_min_edit', None)
+            max_edit = getattr(self, f'{prefix}_max_edit', None)
+            if min_edit and max_edit:
+                for edit, val in [(min_edit, val_min), (max_edit, val_max)]:
+                    edit.blockSignals(True)
+                    edit.setText(f"{val:.1f}")
+                    edit.setStyleSheet("color: grey;")
+                    edit.setProperty('sync_updated', True)
+                    edit.blockSignals(False)
     
     def _reset_limit_display_styling(self):
         """Reset limit display styling to normal when sync zoom is disabled."""
-        try:
-            # Reset wavelength (spectral) limit displays
-            if hasattr(self, 'wavelength_min_edit') and hasattr(self, 'wavelength_max_edit'):
-                self.wavelength_min_edit.setStyleSheet("")
-                self.wavelength_max_edit.setStyleSheet("")
-                self.wavelength_min_edit.setProperty('sync_updated', False)
-                self.wavelength_max_edit.setProperty('sync_updated', False)
-            
-            # Reset spatial (x pixel) limit displays  
-            if hasattr(self, 'spatial_min_edit') and hasattr(self, 'spatial_max_edit'):
-                self.spatial_min_edit.setStyleSheet("")
-                self.spatial_max_edit.setStyleSheet("")
-                self.spatial_min_edit.setProperty('sync_updated', False)
-                self.spatial_max_edit.setProperty('sync_updated', False)
-        except Exception as e:
-            print(f"Error resetting limit display styling: {e}")
+        for prefix in ['wavelength', 'spatial']:
+            for suffix in ['min_edit', 'max_edit']:
+                edit = getattr(self, f'{prefix}_{suffix}', None)
+                if edit:
+                    edit.setStyleSheet("")
+                    edit.setProperty('sync_updated', False)
 
     # Removed handle_crosshair_movement_continued - unused method
     
@@ -313,10 +317,13 @@ class PlotControlWidget(QtWidgets.QWidget):
         setattr(self, f'{group_name}_{limit_type}_edit', edit)
         
         # Connect appropriate range change handler
-        if group_name == 'wavelength':
-            edit.editingFinished.connect(self._wavelength_range_changed)
-        elif group_name == 'spatial':
-            edit.editingFinished.connect(self._spatial_range_changed)
+        handler_map = {
+            'wavelength': lambda: self._axis_range_changed('wavelength', 'xlamRangeChanged', 'wavelength'),
+            'spatial': lambda: self._axis_range_changed('spatial', 'spatialRangeChanged', 'spatial'),
+            'spatial_y': lambda: self._axis_range_changed('spatial_y', 'spatialYRangeChanged', 'spatial_y'),
+        }
+        if group_name in handler_map:
+            edit.editingFinished.connect(handler_map[group_name])
             
         # Add text changed handler to reset styling on manual input
         edit.textChanged.connect(lambda text, e=edit: self._on_manual_limit_input(e))
@@ -404,42 +411,62 @@ class PlotControlWidget(QtWidgets.QWidget):
                 
         return min_val, max_val
     
+    # Mapping: range_type -> list of (widgets_attr, method_name)
+    _RANGE_WIDGET_MAP = {
+        'wavelength': [
+            ('spectra_widgets', 'update_spectral_range'),
+            ('spectrum_image_widgets', 'update_spectral_range'),
+        ],
+        'spatial': [
+            ('spectrum_image_widgets', 'update_spatial_range'),
+            ('spatial_widgets', 'update_spatial_range'),
+            ('scan_image_widgets', 'update_spatial_x_range'),
+        ],
+        'spatial_y': [
+            ('spectrum_image_y_widgets', 'update_spatial_y_range'),
+            ('scan_image_widgets', 'update_spatial_y_range'),
+            ('spatial_widgets', 'update_spatial_y_range'),
+        ],
+    }
+
     def _apply_range_to_widgets(self, min_val, max_val, range_type: str):
         """Apply range values to appropriate widgets."""
-        if range_type == 'spatial':
-            # Apply to spectrum image windows
-            for image_widget in self.spectrum_image_widgets:
-                if hasattr(image_widget, 'update_spatial_range'):
-                    image_widget.update_spatial_range(min_val, max_val)
-            # Apply to spatial windows  
-            for spatial_widget in self.spatial_widgets:
-                if hasattr(spatial_widget, 'update_spatial_range'):
-                    spatial_widget.update_spatial_range(min_val, max_val)
-        elif range_type == 'wavelength':
-            # Apply to spectrum windows
-            for spectrum_widget in self.spectra_widgets:
-                if hasattr(spectrum_widget, 'update_spectral_range'):
-                    spectrum_widget.update_spectral_range(min_val, max_val)
-            # Apply to spectrum image windows  
-            for image_widget in self.spectrum_image_widgets:
-                if hasattr(image_widget, 'update_spectral_range'):
-                    image_widget.update_spectral_range(min_val, max_val)
+        for widgets_attr, method_name in self._RANGE_WIDGET_MAP.get(range_type, []):
+            for widget in getattr(self, widgets_attr):
+                method = getattr(widget, method_name, None)
+                if method:
+                    method(min_val, max_val)
     
-    def _spatial_range_changed(self):
-        """Handle spatial (x pixel) range change from edits."""
-        min_text = self.spatial_min_edit.text().strip()
-        max_text = self.spatial_max_edit.text().strip()
-        
+    def _axis_range_changed(self, range_type: str, signal_attr: str, edit_prefix: str):
+        """Unified handler for axis range changes from edit fields."""
+        min_text = getattr(self, f'{edit_prefix}_min_edit').text().strip()
+        max_text = getattr(self, f'{edit_prefix}_max_edit').text().strip()
+
         min_val, max_val = self._parse_range_values(min_text, max_text)
-        
+
         if min_val is None and max_val is None:
             return
 
-        self._apply_range_to_widgets(min_val, max_val, 'spatial')
-        
-        # Emit signal only if both values are valid
+        self._apply_range_to_widgets(min_val, max_val, range_type)
+
         if min_val is not None and max_val is not None:
-            self.spatialRangeChanged.emit(min_val, max_val)
+            getattr(self, signal_attr).emit(min_val, max_val)
+
+    def _init_spatial_y_range_controls(self, parent_layout: QtWidgets.QVBoxLayout):
+        """Initializes controls for spatial y axis limits (scan viewer only)."""
+        spatial_y_group_box = QtWidgets.QGroupBox("y")
+        limits_spatial_y_layout = QtWidgets.QVBoxLayout(spatial_y_group_box)
+
+        for limit_type in ['min', 'max']:
+            label, edit, layout = self._create_limit_controls(limit_type, 'spatial_y')
+            limits_spatial_y_layout.addLayout(layout)
+
+        self.reset_spatial_y_button = QtWidgets.QPushButton("Reset y range")
+        self.reset_spatial_y_button.clicked.connect(self.resetSpatialYRangeRequested.emit)
+        limits_spatial_y_layout.addWidget(self.reset_spatial_y_button)
+
+        parent_layout.addWidget(spatial_y_group_box)
+
     
     def init_spectrum_limit_controls(self, spectra_widgets: List,
                                    spectrum_image_widgets: List,
@@ -478,14 +505,3 @@ class PlotControlWidget(QtWidgets.QWidget):
                 # Fallback: in case init order changes
                 self.limits_layout.addWidget(limit_group)
     
-    def _wavelength_range_changed(self):
-        """Handle wavelength range change."""
-        min_text = self.wavelength_min_edit.text().strip()
-        max_text = self.wavelength_max_edit.text().strip()
-        
-        min_val, max_val = self._parse_range_values(min_text, max_text)
-        
-        if min_val is None and max_val is None:
-            return
-
-        self._apply_range_to_widgets(min_val, max_val, 'wavelength')

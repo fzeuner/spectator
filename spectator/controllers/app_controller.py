@@ -574,7 +574,6 @@ class Manager:
                 raise NotImplementedError(f"3D viewer for axis configuration {metadata['axes']} not yet implemented")
         elif viewer_type == "scan_viewer":
             from .viewers import scan_viewer
-            # Expect axes order: states (0), spatial (1), spectral (2), spatial (3)
             if (len(data.shape) == 4 and 
                 metadata.get('states_axis') == 0 and 
                 1 in metadata.get('spatial_axes', []) and 
@@ -583,8 +582,16 @@ class Manager:
                 state_names = metadata.get('states_info', {}).get('names', None)
                 scale_info = metadata.get('scale_info', None)
                 return scan_viewer(data, title=metadata['title'], state_names=state_names, scale_info=scale_info)
+            elif (len(data.shape) == 3 and 
+                  metadata.get('spatial_y_axis') == 0 and 
+                  metadata.get('spectral_axis') == 1 and 
+                  metadata.get('spatial_x_axis') == 2):
+                # 3D scan viewer: expand to 4D with a single dummy state
+                scale_info = metadata.get('scale_info', None)
+                data_4d = data[np.newaxis, ...]
+                return scan_viewer(data_4d, title=metadata['title'], state_names=['-'], scale_info=scale_info)
             else:
-                raise NotImplementedError(f"4D scan viewer requires axes [states, spatial, spectral, spatial]; got {metadata['axes']}")
+                raise NotImplementedError(f"scan viewer requires axes [states, spatial_y, spectral, spatial_x] or [spatial_y, spectral, spatial_x]; got {metadata['axes']}")
 
         else:
             # Placeholder for other viewer types

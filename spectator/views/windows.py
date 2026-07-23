@@ -646,10 +646,13 @@ class StokesSpatialYWindow(BasePlotWidget):
 
     def _update_label_avg(self):
         """Update the label for the spectrally averaged y profile."""
+        if not hasattr(self, 'plot_data_avg') or not isinstance(self.plot_data_avg, np.ndarray):
+            self.label_avg.setText("")
+            return
         y_pos = float(self.hLine.value()) if hasattr(self, 'hLine') else float(self.current_y_idx)
         y_idx = int(np.clip(np.round(y_pos), 0, self.n_y - 1)) if self.n_y > 0 else 0
         z = np.nan
-        if hasattr(self, 'plot_data_avg') and isinstance(self.plot_data_avg, np.ndarray) and 0 <= y_idx < self.plot_data_avg.size:
+        if 0 <= y_idx < self.plot_data_avg.size:
             z = float(self.plot_data_avg[y_idx])
         self.label_avg.setText(f"z= {z:.3f}")
 
@@ -717,6 +720,12 @@ class StokesSpatialYWindow(BasePlotWidget):
     @QtCore.pyqtSlot(int)
     def update_spectral_index(self, spectral_idx: int):
         self.update_profile(int(spectral_idx), self.current_x_idx)
+
+    def update_spatial_y_range(self, min_val: Optional[float], max_val: Optional[float]):
+        set_plot_wavelength_range(self.plotItem, self.y_pixels, min_val, max_val, axis='y')
+
+    def reset_spatial_y_range(self):
+        reset_plot_wavelength_range(self.plotItem, self.y_pixels, axis='y')
 
 class StokesSpectrumImageWindow(BasePlotWidget):
     crosshairMoved = QtCore.pyqtSignal(float, float, int)
@@ -1778,6 +1787,12 @@ class StokesSpectrumYImageWindow(BasePlotWidget):
 
     def reset_spectral_range(self):
         reset_plot_wavelength_range(self.plotItem, self.spectral_pixels, axis='x')
+
+    def update_spatial_y_range(self, min_val: Optional[float], max_val: Optional[float]):
+        set_plot_wavelength_range(self.plotItem, self.y_pixels, min_val, max_val, axis='y')
+
+    def reset_spatial_y_range(self):
+        reset_plot_wavelength_range(self.plotItem, self.y_pixels, axis='y')
 
 
 class AverageSpectrumWindow(BasePlotWidget):

@@ -212,7 +212,9 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
 
     # Set widget collections for synchronization
     try:
-        control_widget.set_widget_collections(image_spectra_x, spectra, spatial_x)
+        control_widget.set_widget_collections(image_spectra_x, spectra, spatial_x,
+                                              spectrum_image_y_widgets=image_spectra_y,
+                                              scan_image_widgets=scan_images)
     except Exception:
         pass
 
@@ -454,6 +456,20 @@ def scan_viewer(data: np.ndarray, title: str = 'scan viewer', state_names: List[
     for image_spectrum_widget in image_spectra_x:
         control_widget.spatialRangeChanged.connect(image_spectrum_widget.update_spatial_range)
         control_widget.resetSpatialRangeRequested.connect(image_spectrum_widget.reset_spatial_range)
+    for scan_image in scan_images:
+        control_widget.spatialRangeChanged.connect(scan_image.update_spatial_x_range)
+        control_widget.resetSpatialRangeRequested.connect(scan_image.reset_spatial_x_range)
+
+    # Spatial y axis limits (scan viewer only)
+    for scan_image in scan_images:
+        control_widget.spatialYRangeChanged.connect(scan_image.update_spatial_y_range)
+        control_widget.resetSpatialYRangeRequested.connect(scan_image.reset_spatial_y_range)
+    for image_spectrum_widget in image_spectra_y:
+        control_widget.spatialYRangeChanged.connect(image_spectrum_widget.update_spatial_y_range)
+        control_widget.resetSpatialYRangeRequested.connect(image_spectrum_widget.reset_spatial_y_range)
+    for spatial_widget in spatial_y:
+        control_widget.spatialYRangeChanged.connect(spatial_widget.update_spatial_y_range)
+        control_widget.resetSpatialYRangeRequested.connect(spatial_widget.reset_spatial_y_range)
 
     if avg_spectrum_widget is not None:
         control_widget.xlamRangeChanged.connect(avg_spectrum_widget.update_spectral_range)
