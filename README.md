@@ -143,6 +143,7 @@ More viewers for 2D and 5D data are planned.
 ![viewer](docs/viewer.png)
 #### scan_viewer
 ![viewer](docs/scan_viewer.png)
+![viewer](docs/scan_viewer_one_state.png)
 
 ### Example scripts
 
